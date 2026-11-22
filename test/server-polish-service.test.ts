@@ -56,6 +56,7 @@ describe("Preferences & PolishService", () => {
       customInstructions: "",
       vocabulary: "",
       timeoutMs: 8000,
+      showComposerPill: false,
     });
     expect(Object.keys(OPENAI_COMPAT_PRESETS)).toEqual([
       "opencode-go",

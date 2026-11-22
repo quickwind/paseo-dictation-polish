@@ -44,6 +44,7 @@ export const PolishStatusOutputSchema = z.object({
   lastFallbackReason: z.string().nullable(),
   lastError: z.string().nullable(),
   usesOnCurrentAgent: z.number().int().nonnegative(),
+  showComposerPill: z.boolean(),
 });
 export type PolishStatusOutput = z.infer<typeof PolishStatusOutputSchema>;
 

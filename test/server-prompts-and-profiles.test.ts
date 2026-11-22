@@ -11,6 +11,7 @@ function makePreferences(overrides: Partial<Preferences> = {}): Preferences {
     timeoutMs: 2500,
     customInstructions: "",
     vocabulary: "",
+    showComposerPill: false,
     ...overrides,
     openaiCompatible: {
       preset: "openai",

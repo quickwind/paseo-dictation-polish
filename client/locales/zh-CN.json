@@ -57,7 +57,9 @@
       "lastErrorLabel": "最近错误",
       "refreshLabel": "刷新状态",
       "refreshHint": "获取最新的润色引擎与预热待命状态。",
-      "refreshAction": "刷新"
+      "refreshAction": "刷新",
+      "showComposerPillLabel": "显示输入框上方胶囊（Composer Pill）",
+      "showComposerPillHint": "在活跃 Agent 输入框上方额外显示一键润色胶囊（适合 iOS / 移动端一步直达），原有底栏按钮保持不变。"
     },
     "backgroundAgentSection": {
       "title": "后台 Agent 设置",
@@ -123,9 +125,14 @@
       "profileLabel": "润色风格（Polish Profile）",
       "profileHint": "应用于每条原始草稿的预设格式化规则。",
       "profiles": {
-        "clean": "清理（Clean）— 去除口癖并修正标点",
-        "structured": "结构化（Structured）— 整理为清晰的条目与步骤",
-        "translateEn": "译为英文（Translate to English）— 润色并翻译为英文"
+        "clean": "纯净整理",
+        "structured": "结构化列表",
+        "translateEn": "中译英 Prompt"
+      },
+      "profileDescriptions": {
+        "clean": "纯净整理：去除口癖与自我纠正、修正标点、代码加反引号，保留原语言与原意。",
+        "structured": "结构化列表：在纯净整理基础上，将多条口述要点排版为清晰的 Markdown 列表或步骤。",
+        "translateEn": "中译英 Prompt：将中文或中英混杂口述整理并翻译为简洁地道的英文开发提示词。"
       },
       "customInstructionsLabel": "自定义指令",
       "customInstructionsHint": "可选，附加到润色风格提示词后的额外要求。",

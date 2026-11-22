@@ -102,6 +102,7 @@ export class PolishService {
       lastFallbackReason: this.lastFallbackReason,
       lastError: warmStatus.lastError,
       usesOnCurrentAgent: warmStatus.usesOnCurrentAgent,
+      showComposerPill: preferences.showComposerPill,
     };
   }
 

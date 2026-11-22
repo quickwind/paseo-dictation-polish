@@ -1,4 +1,5 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
+import { createComposerPillManager } from "./client/composer-pill-manager";
 import { ComposerPolishItem } from "./client/composer-polish-item";
 import { polishTranslations } from "./client/i18n";
 import { runComposerUndo } from "./client/polish-controller";
@@ -7,8 +8,15 @@ import { canUndoPolish, getLatestUndoEntry, getUndoEntry } from "./client/undo-s
 import { polishStatusRpc } from "./shared/rpc";
 
 export default function contribute(client: PluginClientContext) {
-  // Prime the daemon gateway binding so warm-standby Background Agent starts before first click.
-  void client.rpc(polishStatusRpc, {}).catch(() => {});
+  const pillManager = createComposerPillManager(client);
+
+  // Prime the daemon gateway binding and sync the optional Composer Pill toggle.
+  void client
+    .rpc(polishStatusRpc, {})
+    .then((status) => {
+      pillManager.setEnabled(status.showComposerPill);
+    })
+    .catch(() => {});
 
   const removeComposerItem = client.addComposerItem({
     id: "polish",
@@ -50,6 +58,7 @@ export default function contribute(client: PluginClientContext) {
   });
 
   return () => {
+    pillManager.dispose();
     removeComposerItem();
     removeSettingsScreen();
     removeRevertCommand();

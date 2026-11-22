@@ -57,7 +57,9 @@
       "lastErrorLabel": "Last Error",
       "refreshLabel": "Refresh Status",
       "refreshHint": "Fetch the latest Polish Engine and warm-standby state.",
-      "refreshAction": "Refresh"
+      "refreshAction": "Refresh",
+      "showComposerPillLabel": "Show Composer Pill",
+      "showComposerPillHint": "Display a one-tap Polish pill above the composer for active agents (helpful on mobile/iOS). Keeps the toolbar button too."
     },
     "backgroundAgentSection": {
       "title": "Background Agent",
@@ -123,9 +125,14 @@
       "profileLabel": "Polish Profile",
       "profileHint": "Preset formatting behavior applied to every Raw Draft.",
       "profiles": {
-        "clean": "Clean — Remove filler words & fix punctuation",
-        "structured": "Structured — Organize into clear bullets & steps",
-        "translateEn": "Translate to English — Polish & translate to English"
+        "clean": "Clean",
+        "structured": "Structured",
+        "translateEn": "Translate to English"
+      },
+      "profileDescriptions": {
+        "clean": "Clean: remove verbal fillers, resolve self-corrections, fix punctuation, and wrap code in backticks.",
+        "structured": "Structured: apply Clean rules and organize multi-point speech into concise Markdown bullets or steps.",
+        "translateEn": "Translate to English: clean and translate Chinese or mixed speech into a concise English coding prompt."
       },
       "customInstructionsLabel": "Custom Instructions",
       "customInstructionsHint": "Optional extra guidance appended to the Polish Profile prompt.",

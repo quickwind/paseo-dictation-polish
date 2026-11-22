@@ -85,6 +85,7 @@ export const PreferencesSchema = z.object({
   customInstructions: z.string().default(""),
   vocabulary: z.string().default(""),
   timeoutMs: z.number().int().min(1000).max(30000).default(8000),
+  showComposerPill: z.boolean().default(false),
 });
 export type Preferences = z.infer<typeof PreferencesSchema>;
 

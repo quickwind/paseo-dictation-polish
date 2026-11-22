@@ -9,6 +9,7 @@ import {
   SettingsRow,
   SettingsSection,
   SettingsSelect,
+  SettingsSwitch,
   TextInput,
   useToast,
 } from "@getpaseo/plugin/client/ui";
@@ -32,6 +33,7 @@ import {
   type PolishRunOutput,
   type WarmStandbyState,
 } from "../shared/rpc";
+import { setComposerPillEnabled } from "./composer-pill-manager";
 import { polishTranslations } from "./i18n";
 import {
   applyOpenAiCompatPreset,
@@ -276,6 +278,17 @@ function ReadySettingsContent({
     }
   }
 
+  function formatProfileDescription(profile: PolishProfile): string {
+    switch (profile) {
+      case "clean":
+        return t("settings.profileSection.profileDescriptions.clean");
+      case "structured":
+        return t("settings.profileSection.profileDescriptions.structured");
+      case "translate-en":
+        return t("settings.profileSection.profileDescriptions.translateEn");
+    }
+  }
+
   const availableProviders = (providersQuery.data?.providers ?? []).filter((p) => p.available);
   const providerOptions = availableProviders.map((p) => ({
     label: p.provider,
@@ -389,6 +402,20 @@ function ReadySettingsContent({
             ]}
             onValueChange={(nextEngine) => {
               void savePreferences({ ...values, engine: nextEngine });
+            }}
+          />
+
+          <SettingsSwitch
+            label={t("settings.engineSection.showComposerPillLabel")}
+            hint={t("settings.engineSection.showComposerPillHint")}
+            value={values.showComposerPill}
+            disabled={saving}
+            onValueChange={(nextShowPill) => {
+              void savePreferences({ ...values, showComposerPill: nextShowPill }).then((ok) => {
+                if (ok) {
+                  setComposerPillEnabled(nextShowPill);
+                }
+              });
             }}
           />
 
@@ -675,7 +702,7 @@ function ReadySettingsContent({
         <SettingsCard>
           <SettingsSelect<PolishProfile>
             label={t("settings.profileSection.profileLabel")}
-            hint={t("settings.profileSection.profileHint")}
+            hint={formatProfileDescription(values.profile)}
             value={values.profile}
             disabled={saving}
             options={[
