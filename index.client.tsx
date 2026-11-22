@@ -2,12 +2,20 @@ import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { ComposerPolishItem } from "./client/composer-polish-item";
 import { polishTranslations } from "./client/i18n";
 import { runComposerUndo } from "./client/polish-controller";
+import { DictationPolishSettingsScreen } from "./client/settings-screen";
 import { canUndoPolish, getLatestUndoEntry, getUndoEntry } from "./client/undo-store";
 
 export default function contribute(client: PluginClientContext) {
   const removeComposerItem = client.addComposerItem({
     id: "polish",
     Component: ComposerPolishItem,
+  });
+
+  const removeSettingsScreen = client.addSettingsScreen({
+    id: "dictation-polish",
+    title: polishTranslations.message("settings.title"),
+    icon: "Sparkles",
+    Component: DictationPolishSettingsScreen,
   });
 
   const removeRevertCommand = client.addCommandCenterItem({
@@ -39,6 +47,7 @@ export default function contribute(client: PluginClientContext) {
 
   return () => {
     removeComposerItem();
+    removeSettingsScreen();
     removeRevertCommand();
     removeSettingsCommand();
   };
