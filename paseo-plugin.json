@@ -1,6 +1,7 @@
 {
   "id": "paseo-dictation-polish",
   "name": "Dictation Polish",
+  "icon": "assets/icon.png",
   "description": "Polish spoken dictation and rough prompt drafts in the Paseo composer.",
   "media": [
     "assets/composer-polish.png",

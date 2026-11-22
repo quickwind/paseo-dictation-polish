@@ -1,4 +1,6 @@
+import { findSvgIconProblem } from "@getpaseo/plugin";
 import { describe, expect, it, vi } from "vitest";
+import { SPARKLES_SLASH_SVG } from "../client/icons";
 import {
   runComposerPolish,
   runComposerUndo,
@@ -369,5 +371,9 @@ describe("undo store and runComposerUndo", () => {
     expect(setPrompt).not.toHaveBeenCalled();
     expect(livePrompt).toBe("raw dictation + extra typing");
     expect(notify.show).toHaveBeenCalledWith(expect.any(String), { variant: "info" });
+  });
+
+  it("uses a valid Paseo inline SVG for the slashed Sparkles undo icon", () => {
+    expect(findSvgIconProblem(SPARKLES_SLASH_SVG)).toBeNull();
   });
 });

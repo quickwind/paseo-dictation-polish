@@ -4,6 +4,7 @@ import { Action, useToast } from "@getpaseo/plugin/client/ui";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { polishRunRpc } from "../shared/rpc";
 import { polishTranslations } from "./i18n";
+import { SPARKLES_SLASH_SVG } from "./icons";
 import { runComposerPolish, runComposerUndo } from "./polish-controller";
 import {
   canUndoPolish,
@@ -72,7 +73,7 @@ export function ComposerPolishItem(_props: PluginComposerItemProps) {
     return (
       <Action
         title={t("composer.undoPolish")}
-        icon="Undo2"
+        icon={{ svg: SPARKLES_SLASH_SVG }}
         onPress={() =>
           runComposerUndo({
             composer,
