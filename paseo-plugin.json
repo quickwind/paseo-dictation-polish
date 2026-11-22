@@ -2,7 +2,7 @@
   "id": "paseo-dictation-polish",
   "name": "Dictation Polish",
   "icon": "assets/icon.png",
-  "description": "Polish spoken dictation and rough prompt drafts in the Paseo composer.",
+  "description": "Wispr Flow-style dictation polishing inside Paseo: remove fillers, fix self-corrections, and format spoken drafts with one click.",
   "media": [
     "assets/composer-polish.png",
     "assets/composer-undo.png",
@@ -15,7 +15,7 @@
   "translations": {
     "zh-CN": {
       "name": "听写润色",
-      "description": "在 Paseo 输入框中一键润色语音听写与口语草稿。"
+      "description": "Paseo 内的 Wispr Flow 风格听写润色：一键去口癖、消解口误自纠，将口语草稿整理为清晰指令。"
     }
   }
 }
