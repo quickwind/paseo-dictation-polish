@@ -12,7 +12,7 @@ import {
   TextInput,
   useToast,
 } from "@getpaseo/plugin/client/ui";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
@@ -153,14 +153,10 @@ function ReadySettingsContent({
   const [timeoutDraft, setTimeoutDraft] = useState(String(values.timeoutMs));
   const [profileInputVersion, setProfileInputVersion] = useState(0);
 
-  // Warm button state
-  const [warming, setWarming] = useState(false);
-
   // Playground state
   const [playgroundDraft, setPlaygroundDraft] = useState(() => t("settings.playground.sampleDraft"));
   const playgroundEditedRef = useRef(false);
   const [playgroundProfile, setPlaygroundProfile] = useState<"" | PolishProfile>("");
-  const [playgroundRunning, setPlaygroundRunning] = useState(false);
   const [playgroundResult, setPlaygroundResult] = useState<PolishRunOutput | null>(null);
   const [playgroundError, setPlaygroundError] = useState<string | null>(null);
 
@@ -188,6 +184,43 @@ function ReadySettingsContent({
   const statusQuery = useQuery({
     queryKey: ["paseo-dictation-polish", "status", host.id],
     queryFn: () => getStatus({}),
+  });
+
+  const warmMutation = useMutation({
+    mutationFn: () => runWarm({}),
+    onSuccess: (res) => {
+      if (res.error) {
+        toast.error(t("settings.backgroundAgentSection.warmFailed", { error: res.error }));
+      } else {
+        toast.show(
+          t("settings.backgroundAgentSection.warmSuccess", {
+            state: formatWarmState(res.warmState),
+          }),
+          { variant: "success" },
+        );
+      }
+      void statusQuery.refetch();
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(t("settings.backgroundAgentSection.warmFailed", { error: message }));
+      void statusQuery.refetch();
+    },
+  });
+
+  const playgroundMutation = useMutation({
+    mutationFn: (input: { text: string; profileOverride?: PolishProfile }) => runPolish(input),
+    onMutate: () => {
+      setPlaygroundError(null);
+    },
+    onSuccess: (res) => {
+      setPlaygroundResult(res);
+      void statusQuery.refetch();
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      setPlaygroundError(t("settings.playground.runError", { error: message }));
+    },
   });
 
   // Available providers query (only needed when background-agent is active)
@@ -532,39 +565,13 @@ function ReadySettingsContent({
               label={t("settings.backgroundAgentSection.warmLabel")}
               hint={t("settings.backgroundAgentSection.warmHint")}
               actionLabel={
-                warming
+                warmMutation.isPending
                   ? t("settings.backgroundAgentSection.warmingAction")
                   : t("settings.backgroundAgentSection.warmAction")
               }
-              disabled={warming || saving}
+              disabled={warmMutation.isPending || saving}
               onPress={() => {
-                setWarming(true);
-                void runWarm({})
-                  .then((res) => {
-                    if (res.error) {
-                      toast.error(
-                        t("settings.backgroundAgentSection.warmFailed", { error: res.error }),
-                      );
-                    } else {
-                      toast.show(
-                        t("settings.backgroundAgentSection.warmSuccess", {
-                          state: formatWarmState(res.warmState),
-                        }),
-                        { variant: "success" },
-                      );
-                    }
-                    void statusQuery.refetch();
-                  })
-                  .catch((err: unknown) => {
-                    const message = err instanceof Error ? err.message : String(err);
-                    toast.error(
-                      t("settings.backgroundAgentSection.warmFailed", { error: message }),
-                    );
-                    void statusQuery.refetch();
-                  })
-                  .finally(() => {
-                    setWarming(false);
-                  });
+                warmMutation.mutate();
               }}
             />
           </SettingsCard>
@@ -774,7 +781,7 @@ function ReadySettingsContent({
               }}
               placeholder={t("settings.playground.sampleDraft")}
               placeholderTextColor={theme.colors.foregroundMuted}
-              editable={!playgroundRunning}
+              editable={!playgroundMutation.isPending}
               style={[
                 styles.multilineInput,
                 {
@@ -791,7 +798,7 @@ function ReadySettingsContent({
             label={t("settings.playground.profileOverrideLabel")}
             hint={t("settings.playground.profileOverrideHint")}
             value={playgroundProfile}
-            disabled={playgroundRunning}
+            disabled={playgroundMutation.isPending}
             options={[
               {
                 label: t("settings.playground.useSavedProfile", {
@@ -808,31 +815,18 @@ function ReadySettingsContent({
 
           <View style={styles.playgroundActionRow}>
             <Pressable
-              disabled={playgroundRunning || playgroundDraft.trim().length === 0}
+              disabled={playgroundMutation.isPending || playgroundDraft.trim().length === 0}
               onPress={() => {
-                setPlaygroundRunning(true);
-                setPlaygroundError(null);
-                void runPolish({
+                playgroundMutation.mutate({
                   text: playgroundDraft,
                   ...(playgroundProfile ? { profileOverride: playgroundProfile } : {}),
-                })
-                  .then((res) => {
-                    setPlaygroundResult(res);
-                    void statusQuery.refetch();
-                  })
-                  .catch((err: unknown) => {
-                    const message = err instanceof Error ? err.message : String(err);
-                    setPlaygroundError(t("settings.playground.runError", { error: message }));
-                  })
-                  .finally(() => {
-                    setPlaygroundRunning(false);
-                  });
+                });
               }}
               style={({ pressed }) => [
                 styles.primaryButton,
                 {
                   backgroundColor:
-                    playgroundRunning || playgroundDraft.trim().length === 0
+                    playgroundMutation.isPending || playgroundDraft.trim().length === 0
                       ? theme.colors.surface2
                       : theme.colors.accent,
                   opacity: pressed ? 0.85 : 1,
@@ -842,14 +836,14 @@ function ReadySettingsContent({
               <Text
                 style={{
                   color:
-                    playgroundRunning || playgroundDraft.trim().length === 0
+                    playgroundMutation.isPending || playgroundDraft.trim().length === 0
                       ? theme.colors.foregroundMuted
                       : theme.colors.accentForeground,
                   fontSize: 14,
                   fontWeight: "600",
                 }}
               >
-                {playgroundRunning
+                {playgroundMutation.isPending
                   ? t("settings.playground.runningAction")
                   : t("settings.playground.runAction")}
               </Text>

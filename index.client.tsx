@@ -4,8 +4,12 @@ import { polishTranslations } from "./client/i18n";
 import { runComposerUndo } from "./client/polish-controller";
 import { DictationPolishSettingsScreen } from "./client/settings-screen";
 import { canUndoPolish, getLatestUndoEntry, getUndoEntry } from "./client/undo-store";
+import { polishStatusRpc } from "./shared/rpc";
 
 export default function contribute(client: PluginClientContext) {
+  // Prime the daemon gateway binding so warm-standby Background Agent starts before first click.
+  void client.rpc(polishStatusRpc, {}).catch(() => {});
+
   const removeComposerItem = client.addComposerItem({
     id: "polish",
     Component: ComposerPolishItem,

@@ -16,6 +16,8 @@ import {
 
 export function ComposerPolishItem(_props: PluginComposerItemProps) {
   const composer = useComposer();
+  const composerRef = useRef(composer);
+  composerRef.current = composer;
   const runPolish = useRpc(polishRunRpc);
   const toast = useToast();
   const { t } = useTranslation(polishTranslations);
@@ -90,6 +92,7 @@ export function ComposerPolishItem(_props: PluginComposerItemProps) {
       onPress={() =>
         runComposerPolish({
           composer,
+          getLatestComposer: () => composerRef.current,
           runPolish,
           notify: toast,
           slotId,

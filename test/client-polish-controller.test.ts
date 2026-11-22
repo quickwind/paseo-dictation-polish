@@ -327,4 +327,47 @@ describe("undo store and runComposerUndo", () => {
       }),
     ).toBe(true);
   });
+
+  it("aborts overwrite when useComposer returns immutable snapshots and user types during flight", async () => {
+    let livePrompt = "raw dictation";
+    const setPrompt = vi.fn((next: string) => {
+      livePrompt = next;
+    });
+    const focus = vi.fn(async () => {});
+    const makeSnapshot = () =>
+      Object.freeze({
+        prompt: livePrompt,
+        setPrompt,
+        focus,
+      });
+
+    let currentSnapshot = makeSnapshot();
+    const clickTimeSnapshot = currentSnapshot;
+    const notify = createMockNotifier();
+
+    const runPolish = vi.fn(async () => {
+      // Simulate host producing a brand-new immutable snapshot when user types mid-flight
+      livePrompt = "raw dictation + extra typing";
+      currentSnapshot = makeSnapshot();
+      return {
+        text: "Polished dictation.",
+        changed: true,
+        fallback: false,
+        latencyMs: 50,
+        engine: "openai-compatible" as const,
+      };
+    });
+
+    const outcome = await runComposerPolish({
+      composer: clickTimeSnapshot,
+      getLatestComposer: () => currentSnapshot,
+      runPolish,
+      notify,
+    });
+
+    expect(outcome).toEqual({ status: "aborted_stale" });
+    expect(setPrompt).not.toHaveBeenCalled();
+    expect(livePrompt).toBe("raw dictation + extra typing");
+    expect(notify.show).toHaveBeenCalledWith(expect.any(String), { variant: "info" });
+  });
 });

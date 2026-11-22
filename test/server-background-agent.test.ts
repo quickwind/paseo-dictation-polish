@@ -128,7 +128,7 @@ describe("WarmBackgroundAgentManager & PolishService", () => {
     expect(status.lastError).toBeNull();
   });
 
-  it("sets warmState error when warming with empty provider", async () => {
+  it("warms cleanly in Auto / Default mode when provider is empty and surfaces gateway errors when none are available", async () => {
     const gateway = new FakeBackgroundAgentGateway();
     const prefs = makePreferences({
       backgroundAgent: { provider: "", model: "", thinking: "low", rotateAfterUses: 1 },
@@ -141,9 +141,25 @@ describe("WarmBackgroundAgentManager & PolishService", () => {
     });
 
     const warmRes = await service.warm();
-    expect(warmRes.warmState).toBe("error");
-    expect(warmRes.error).toContain("provider");
-    expect(gateway.createdAgents).toHaveLength(0);
+    expect(warmRes.warmState).toBe("ready");
+    expect(warmRes.error).toBeNull();
+    expect(gateway.createdAgents).toHaveLength(1);
+    expect(gateway.createdAgents[0].provider).toBe("");
+
+    // When no provider is available on host, gateway error surfaces as warmState: "error"
+    const emptyGateway = new FakeBackgroundAgentGateway();
+    emptyGateway.createHandler = async () => {
+      throw new Error("No available Paseo provider found for Background Agent.");
+    };
+    const failingManager = new WarmBackgroundAgentManager({ gateway: emptyGateway });
+    const failingService = new PolishService({
+      getSettings: async () => prefs,
+      backgroundAgentManager: failingManager,
+    });
+
+    const failedWarm = await failingService.warm();
+    expect(failedWarm.warmState).toBe("error");
+    expect(failedWarm.error).toContain("No available Paseo provider");
   });
 
   it("reuses warm agent with zero cold-start, returns Polished Text first, and rotates asynchronously when rotateAfterUses=1", async () => {
@@ -466,5 +482,50 @@ describe("createPaseoBackgroundAgentGateway", () => {
 
     await gateway.killAgent("paseo-bg-99");
     expect(archiveMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("auto-selects the first available provider via listAvailable when provider is empty", async () => {
+    const listAvailableMock = vi.fn(async () => ({
+      providers: [
+        { provider: "codex", available: false, error: "not logged in" },
+        { provider: "claude", available: true, error: null },
+      ],
+    }));
+    const listModelsMock = vi.fn(async () => ({
+      provider: "claude",
+      models: [{ id: "claude-haiku-5-5", isDefault: true, isSelectable: true }],
+      error: null,
+    }));
+    const createMock = vi.fn(async () => ({ id: "paseo-auto-1" }));
+
+    const fakePaseo = {
+      providers: {
+        listAvailable: listAvailableMock,
+        listModels: listModelsMock,
+      },
+      agents: {
+        create: createMock,
+        ref: vi.fn(),
+      },
+    } as unknown as PaseoApi;
+
+    const gateway = createPaseoBackgroundAgentGateway(fakePaseo, { cwd: "/tmp/work" });
+    const created = await gateway.createAgent({
+      provider: "",
+      thinking: "low",
+    });
+
+    expect(created).toEqual({ agentId: "paseo-auto-1" });
+    expect(listAvailableMock).toHaveBeenCalledTimes(1);
+    expect(listModelsMock).toHaveBeenCalledWith("claude");
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        background: true,
+        config: expect.objectContaining({
+          provider: "claude/claude-haiku-5-5",
+          mcpServers: {},
+        }),
+      }),
+    );
   });
 });

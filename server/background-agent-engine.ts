@@ -90,8 +90,17 @@ async function resolveProviderModel(
   provider: string,
   model?: string,
 ): Promise<string> {
-  const trimmedProvider = provider.trim();
+  let trimmedProvider = provider.trim();
   const trimmedModel = model?.trim() ?? "";
+
+  if (!trimmedProvider) {
+    const available = await paseo.providers.listAvailable();
+    const firstAvailable = (available.providers ?? []).find((entry) => entry.available);
+    if (!firstAvailable) {
+      throw new Error("No available Paseo provider found for Background Agent.");
+    }
+    trimmedProvider = firstAvailable.provider;
+  }
 
   if (trimmedProvider.includes("/")) {
     if (!trimmedModel) {
@@ -274,18 +283,6 @@ export class WarmBackgroundAgentManager {
       return { warmState: "disabled", error: null };
     }
 
-    const provider = preferences.backgroundAgent.provider.trim();
-    if (!provider) {
-      this.epoch += 1;
-      const oldAgentId = this.detachActiveAgent();
-      this.warmState = "error";
-      this.lastError = "Background agent provider is not configured.";
-      if (oldAgentId) {
-        await this.safeKill(oldAgentId);
-      }
-      return { warmState: "error", error: this.lastError };
-    }
-
     const fingerprint = buildConfigFingerprint(preferences);
 
     if (
@@ -325,18 +322,6 @@ export class WarmBackgroundAgentManager {
       return { warmState: "disabled", error: null };
     }
 
-    const provider = preferences.backgroundAgent.provider.trim();
-    if (!provider) {
-      this.epoch += 1;
-      const oldAgentId = this.detachActiveAgent();
-      this.warmState = "idle";
-      this.lastError = null;
-      if (oldAgentId) {
-        await this.safeKill(oldAgentId);
-      }
-      return { warmState: "idle", error: null };
-    }
-
     if (!this.gateway) {
       if (this.warmState === "disabled") {
         this.warmState = "idle";
@@ -371,13 +356,6 @@ export class WarmBackgroundAgentManager {
 
     if (!this.gateway) {
       throw new Error("Background agent gateway is not configured.");
-    }
-
-    const provider = preferences.backgroundAgent.provider.trim();
-    if (!provider) {
-      this.warmState = "error";
-      this.lastError = "Background agent provider is not configured.";
-      throw new Error(this.lastError);
     }
 
     const fingerprint = buildConfigFingerprint(preferences);

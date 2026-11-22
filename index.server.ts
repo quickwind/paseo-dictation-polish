@@ -51,7 +51,6 @@ export default function contribute(server: PluginServerContext) {
       const prefs = await readPreferences();
       if (
         prefs.engine === "background-agent" &&
-        prefs.backgroundAgent.provider.trim().length > 0 &&
         manager.getStatus().warmState === "idle"
       ) {
         void manager.syncSettings(prefs);

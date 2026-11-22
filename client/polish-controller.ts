@@ -31,6 +31,11 @@ export type ComposerPolishResult =
 
 export interface RunComposerPolishParams {
   readonly composer: ComposerHandle;
+  /**
+   * Returns the latest immutable composer snapshot from `useComposer()` so
+   * post-await race checks read live text instead of the click-time snapshot.
+   */
+  readonly getLatestComposer?: () => ComposerHandle;
   readonly runPolish: (input: PolishRunInput) => Promise<PolishRunOutput>;
   readonly notify: PolishNotifier;
   readonly messages?: PolishFeedbackMessages;
@@ -50,6 +55,7 @@ const DEFAULT_MESSAGES: PolishFeedbackMessages = {
  */
 export async function runComposerPolish({
   composer,
+  getLatestComposer,
   runPolish,
   notify,
   messages = DEFAULT_MESSAGES,
@@ -68,7 +74,8 @@ export async function runComposerPolish({
     return { status: "error" };
   }
 
-  if (composer.prompt !== rawDraft) {
+  const liveComposer = getLatestComposer ? getLatestComposer() : composer;
+  if (liveComposer.prompt !== rawDraft) {
     notify.show(messages.raceAborted, { variant: "info" });
     return { status: "aborted_stale" };
   }
@@ -79,13 +86,13 @@ export async function runComposerPolish({
     return { status: "fallback", fallbackReason: result.fallbackReason };
   }
 
-  composer.setPrompt(result.text);
-  await composer.focus();
+  liveComposer.setPrompt(result.text);
+  await liveComposer.focus();
 
   if (result.changed && result.text !== rawDraft) {
-    setUndoEntry(composer, { rawDraft, polishedText: result.text }, slotId);
+    setUndoEntry(liveComposer, { rawDraft, polishedText: result.text }, slotId);
   } else {
-    clearUndoEntry(composer, slotId);
+    clearUndoEntry(liveComposer, slotId);
   }
 
   return { status: "applied", changed: result.changed };
