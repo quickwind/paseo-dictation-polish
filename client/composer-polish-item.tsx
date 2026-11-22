@@ -9,7 +9,9 @@ import {
   canUndoPolish,
   clearUndoEntry,
   getUndoEntry,
+  shouldClearUndoEntry,
   subscribeUndoStore,
+  type PolishUndoEntry,
 } from "./undo-store";
 
 export function ComposerPolishItem(_props: PluginComposerItemProps) {
@@ -22,6 +24,7 @@ export function ComposerPolishItem(_props: PluginComposerItemProps) {
     slotIdRef.current = Symbol("composer-polish-slot");
   }
   const slotId = slotIdRef.current;
+  const observedPolishedEntryRef = useRef<PolishUndoEntry | null>(null);
 
   const undoEntry = useSyncExternalStore(
     subscribeUndoStore,
@@ -32,7 +35,25 @@ export function ComposerPolishItem(_props: PluginComposerItemProps) {
   const showUndo = canUndoPolish(composer.prompt, undoEntry);
 
   useEffect(() => {
-    if (undoEntry !== undefined && !showUndo) {
+    if (undoEntry === undefined) {
+      observedPolishedEntryRef.current = null;
+      return;
+    }
+
+    if (showUndo) {
+      observedPolishedEntryRef.current = undoEntry;
+      return;
+    }
+
+    const hasObservedPolished = observedPolishedEntryRef.current === undoEntry;
+    if (
+      shouldClearUndoEntry({
+        currentPrompt: composer.prompt,
+        entry: undoEntry,
+        hasObservedPolished,
+      })
+    ) {
+      observedPolishedEntryRef.current = null;
       clearUndoEntry(composer, slotId);
     }
   }, [composer, slotId, undoEntry, showUndo]);

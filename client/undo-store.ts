@@ -28,6 +28,24 @@ export function canUndoPolish(
   return entry !== undefined && currentPrompt === entry.polishedText;
 }
 
+export function shouldClearUndoEntry(params: {
+  readonly currentPrompt: string;
+  readonly entry: PolishUndoEntry | undefined;
+  readonly hasObservedPolished: boolean;
+}): boolean {
+  const { currentPrompt, entry, hasObservedPolished } = params;
+  if (entry === undefined) {
+    return false;
+  }
+  if (currentPrompt === entry.polishedText) {
+    return false;
+  }
+  if (!hasObservedPolished && currentPrompt === entry.rawDraft) {
+    return false;
+  }
+  return true;
+}
+
 export function getUndoEntry(
   composer: object,
   slotId?: symbol,

@@ -10,6 +10,7 @@ import {
   clearUndoEntry,
   getLatestUndoEntry,
   getUndoEntry,
+  shouldClearUndoEntry,
 } from "../client/undo-store";
 import type { PolishRunOutput } from "../shared/rpc";
 
@@ -282,5 +283,48 @@ describe("undo store and runComposerUndo", () => {
     expect(editedNoOp).toEqual({ reverted: false });
 
     clearUndoEntry(composer);
+  });
+
+  it("keeps undo entry alive before asynchronous composer.prompt update flushes, then clears after user edit", () => {
+    const entry = {
+      rawDraft: "um raw draft",
+      polishedText: "Polished draft.",
+    };
+
+    // Before host useComposer() re-renders with polishedText, currentPrompt may still equal rawDraft
+    expect(
+      shouldClearUndoEntry({
+        currentPrompt: "um raw draft",
+        entry,
+        hasObservedPolished: false,
+      }),
+    ).toBe(false);
+
+    // Once polishedText is rendered, undo remains active
+    expect(
+      shouldClearUndoEntry({
+        currentPrompt: "Polished draft.",
+        entry,
+        hasObservedPolished: true,
+      }),
+    ).toBe(false);
+
+    // After polishedText was observed, any user edit invalidates the undo entry
+    expect(
+      shouldClearUndoEntry({
+        currentPrompt: "Polished draft. Extra",
+        entry,
+        hasObservedPolished: true,
+      }),
+    ).toBe(true);
+
+    // Even if polishedText was not yet observed, diverging away from rawDraft clears it
+    expect(
+      shouldClearUndoEntry({
+        currentPrompt: "completely different text",
+        entry,
+        hasObservedPolished: false,
+      }),
+    ).toBe(true);
   });
 });

@@ -2,8 +2,19 @@
   "id": "paseo-dictation-polish",
   "name": "Dictation Polish",
   "description": "Polish spoken dictation and rough prompt drafts in the Paseo composer.",
-  "media": [],
+  "media": [
+    "assets/composer-polish.png",
+    "assets/composer-undo.png",
+    "assets/settings-screen.png",
+    "assets/test-playground.png"
+  ],
   "requirements": {
     "paseo": ">=0.17.0"
+  },
+  "translations": {
+    "zh-CN": {
+      "name": "听写润色",
+      "description": "在 Paseo 输入框中一键润色语音听写与口语草稿。"
+    }
   }
 }
