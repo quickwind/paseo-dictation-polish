@@ -1,0 +1,16 @@
+{
+  "composer": {
+    "polish": "润色",
+    "undoPolish": "撤销润色"
+  },
+  "command": {
+    "revertLastPolish": "撤销上次润色",
+    "openSettings": "听写润色设置"
+  },
+  "toast": {
+    "raceAborted": "润色期间草稿已修改，已保留你的编辑。",
+    "fallback": "未能润色草稿（{{reason}}），已保留原文。",
+    "fallbackUnknown": "未知原因",
+    "error": "润色请求失败，已保留原文。"
+  }
+}

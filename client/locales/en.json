@@ -1,0 +1,16 @@
+{
+  "composer": {
+    "polish": "Polish",
+    "undoPolish": "Undo polish"
+  },
+  "command": {
+    "revertLastPolish": "Revert last polish",
+    "openSettings": "Dictation Polish Settings"
+  },
+  "toast": {
+    "raceAborted": "Draft changed while polishing; kept your edits.",
+    "fallback": "Could not polish draft ({{reason}}); kept original text.",
+    "fallbackUnknown": "unknown",
+    "error": "Failed to polish draft; kept original text."
+  }
+}
