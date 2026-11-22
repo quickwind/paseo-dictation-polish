@@ -10,6 +10,14 @@ import { SPARKLES_SLASH_SVG } from "./icons";
 import { runComposerPolish, runComposerUndo } from "./polish-controller";
 import { canUndoPolish, getUndoEntry, subscribeUndoStore } from "./undo-store";
 
+type PillMode = "polish" | "undo";
+
+interface ManagedPill {
+  readonly workspaceId: string;
+  readonly registration: PluginButtonRegistration<PluginText>;
+  mode: PillMode;
+}
+
 interface PillManagerController {
   setEnabled(enabled: boolean): void;
   dispose(): void;
@@ -28,11 +36,12 @@ export function setComposerPillEnabled(enabled: boolean): void {
 }
 
 export function createComposerPillManager(client: PluginClientContext): PillManagerController {
-  const pills = new Map<string, PluginButtonRegistration<PluginText>>();
+  const pills = new Map<string, ManagedPill>();
   const slots = new Map<string, symbol>();
   let enabled = false;
   let lifetime: AbortController | null = null;
   let unsubscribeUndo: (() => void) | null = null;
+  let delayedSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
   const getSlotId = (agentId: string): symbol => {
     let slot = slots.get(agentId);
@@ -43,11 +52,18 @@ export function createComposerPillManager(client: PluginClientContext): PillMana
     return slot;
   };
 
-  const buildButton = (agentId: string): PluginButton<PluginText> => {
+  const resolveMode = (agentId: string): PillMode => {
     const [composer] = client.composers({ agentId });
+    if (!composer) {
+      return "polish";
+    }
     const slotId = getSlotId(agentId);
-    const undoEntry = composer ? getUndoEntry(composer, slotId) : undefined;
-    const isUndo = composer ? canUndoPolish(composer.prompt, undoEntry) : false;
+    const undoEntry = getUndoEntry(composer, slotId, composer.prompt);
+    return canUndoPolish(composer.prompt, undoEntry) ? "undo" : "polish";
+  };
+
+  const buildButton = (agentId: string, mode: PillMode): PluginButton<PluginText> => {
+    const isUndo = mode === "undo";
 
     return {
       title: isUndo
@@ -66,14 +82,14 @@ export function createComposerPillManager(client: PluginClientContext): PillMana
           }
 
           const currentSlotId = getSlotId(agentId);
-          const entry = getUndoEntry(currentComposer, currentSlotId);
+          const entry = getUndoEntry(currentComposer, currentSlotId, currentComposer.prompt);
           if (canUndoPolish(currentComposer.prompt, entry)) {
             await runComposerUndo({
               composer: currentComposer,
               entry,
               slotId: currentSlotId,
             });
-            refreshAllPills();
+            syncChangedPills();
             return;
           }
 
@@ -100,7 +116,7 @@ export function createComposerPillManager(client: PluginClientContext): PillMana
             },
           });
 
-          refreshAllPills();
+          syncChangedPills();
           if (toastMessage) {
             throw new Error(toastMessage);
           }
@@ -109,14 +125,34 @@ export function createComposerPillManager(client: PluginClientContext): PillMana
     };
   };
 
-  const refreshAllPills = () => {
-    for (const [agentId, registration] of pills.entries()) {
+  /**
+   * Only updates pills whose visual mode ("polish" <-> "undo") actually changed,
+   * avoiding O(N) UI updates across idle agents.
+   */
+  const syncChangedPills = () => {
+    for (const [agentId, managed] of pills.entries()) {
+      const nextMode = resolveMode(agentId);
+      if (nextMode === managed.mode) {
+        continue;
+      }
+      managed.mode = nextMode;
       try {
-        registration.update(buildButton(agentId));
+        managed.registration.update(buildButton(agentId, nextMode));
       } catch {
         // Ignore updates if pill was already removed during teardown.
       }
     }
+  };
+
+  const scheduleSync = () => {
+    syncChangedPills();
+    if (delayedSyncTimer !== null) {
+      clearTimeout(delayedSyncTimer);
+    }
+    delayedSyncTimer = setTimeout(() => {
+      delayedSyncTimer = null;
+      syncChangedPills();
+    }, 60);
   };
 
   const registerAgent = (agent: { id: string; workspaceId?: string | null }) => {
@@ -124,26 +160,35 @@ export function createComposerPillManager(client: PluginClientContext): PillMana
       return;
     }
     const { id: agentId, workspaceId } = agent;
-    pills.get(agentId)?.remove();
-    pills.set(
+    const existing = pills.get(agentId);
+    // Avoid tearing down and recreating the pill on every agent_update stream event.
+    if (existing && existing.workspaceId === workspaceId) {
+      return;
+    }
+
+    existing?.registration.remove();
+    const initialMode = resolveMode(agentId);
+    const registration = client.addComposerPill({
+      id: "polish",
+      workspaceId,
       agentId,
-      client.addComposerPill({
-        id: "polish",
-        workspaceId,
-        agentId,
-        button: buildButton(agentId),
-      }),
-    );
+      button: buildButton(agentId, initialMode),
+    });
+    pills.set(agentId, { workspaceId, registration, mode: initialMode });
   };
 
   const removeAll = () => {
-    for (const pill of pills.values()) {
-      pill.remove();
+    for (const managed of pills.values()) {
+      managed.registration.remove();
     }
     pills.clear();
   };
 
   const stop = () => {
+    if (delayedSyncTimer !== null) {
+      clearTimeout(delayedSyncTimer);
+      delayedSyncTimer = null;
+    }
     lifetime?.abort();
     lifetime = null;
     unsubscribeUndo?.();
@@ -155,7 +200,7 @@ export function createComposerPillManager(client: PluginClientContext): PillMana
     stop();
     const controller = new AbortController();
     lifetime = controller;
-    unsubscribeUndo = subscribeUndoStore(refreshAllPills);
+    unsubscribeUndo = subscribeUndoStore(scheduleSync);
 
     void client.paseo.agents
       .list({ subscribe: {}, signal: controller.signal })
@@ -166,9 +211,18 @@ export function createComposerPillManager(client: PluginClientContext): PillMana
         subscription.subscribe({
           snapshot: ({ entries }) => {
             if (controller.signal.aborted) return;
-            removeAll();
+            const liveIds = new Set<string>();
             for (const { agent } of entries) {
-              registerAgent(agent);
+              if (agent.workspaceId) {
+                liveIds.add(agent.id);
+                registerAgent(agent);
+              }
+            }
+            for (const [agentId, managed] of pills.entries()) {
+              if (!liveIds.has(agentId)) {
+                managed.registration.remove();
+                pills.delete(agentId);
+              }
             }
           },
           update: (message) => {
@@ -178,8 +232,11 @@ export function createComposerPillManager(client: PluginClientContext): PillMana
               registerAgent(update.agent);
               return;
             }
-            pills.get(update.agentId)?.remove();
-            pills.delete(update.agentId);
+            const existing = pills.get(update.agentId);
+            if (existing) {
+              existing.registration.remove();
+              pills.delete(update.agentId);
+            }
           },
         });
         return undefined;

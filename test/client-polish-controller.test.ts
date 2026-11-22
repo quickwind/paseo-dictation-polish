@@ -376,4 +376,34 @@ describe("undo store and runComposerUndo", () => {
   it("uses a valid Paseo inline SVG for the slashed Sparkles undo icon", () => {
     expect(findSvgIconProblem(SPARKLES_SLASH_SVG)).toBeNull();
   });
+
+  it("syncs undo state across two different slots (Composer Pill and toolbar Action) on the same composer", async () => {
+    const { composer } = createMockComposer("um raw dictation");
+    const notify = createMockNotifier();
+    const pillSlot = Symbol("pill");
+    const toolbarSlot = Symbol("toolbar");
+
+    const runPolish = vi.fn(async () => ({
+      text: "Clean dictation.",
+      changed: true,
+      fallback: false,
+      latencyMs: 25,
+      engine: "openai-compatible" as const,
+    }));
+
+    // Polish triggered from the Pill
+    await runComposerPolish({ composer, runPolish, notify, slotId: pillSlot });
+    expect(composer.prompt).toBe("Clean dictation.");
+
+    // Toolbar Action (different slotId) immediately sees the same undo entry
+    const toolbarEntry = getUndoEntry(composer, toolbarSlot, composer.prompt);
+    expect(canUndoPolish(composer.prompt, toolbarEntry)).toBe(true);
+
+    // Undoing from the Toolbar Action restores Raw Draft and clears BOTH slots
+    const undone = await runComposerUndo({ composer, entry: toolbarEntry, slotId: toolbarSlot });
+    expect(undone).toEqual({ reverted: true });
+    expect(composer.prompt).toBe("um raw dictation");
+    expect(getUndoEntry(composer, pillSlot, composer.prompt)).toBeUndefined();
+    expect(getUndoEntry(composer, toolbarSlot, composer.prompt)).toBeUndefined();
+  });
 });

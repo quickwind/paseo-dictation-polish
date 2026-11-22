@@ -31,8 +31,8 @@ export function ComposerPolishItem(_props: PluginComposerItemProps) {
 
   const undoEntry = useSyncExternalStore(
     subscribeUndoStore,
-    () => getUndoEntry(composer, slotId),
-    () => getUndoEntry(composer, slotId),
+    () => getUndoEntry(composer, slotId, composer.prompt),
+    () => getUndoEntry(composer, slotId, composer.prompt),
   );
 
   const showUndo = canUndoPolish(composer.prompt, undoEntry);
