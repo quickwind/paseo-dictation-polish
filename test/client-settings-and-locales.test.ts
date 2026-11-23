@@ -54,10 +54,9 @@ describe("client locales parity", () => {
 });
 
 describe("client/settings-helpers", () => {
-  it("applies non-custom OpenAI-compatible presets while preserving apiKey", () => {
+  it("applies non-custom OpenAI-compatible presets cleanly", () => {
     const initial = OpenAiCompatiblePreferencesSchema.parse({
       preset: "opencode-go",
-      apiKey: "secret-key",
     });
 
     const ollama = applyOpenAiCompatPreset(initial, "ollama");
@@ -66,7 +65,6 @@ describe("client/settings-helpers", () => {
       baseUrl: OPENAI_COMPAT_PRESETS.ollama.baseUrl,
       model: OPENAI_COMPAT_PRESETS.ollama.model,
       apiKeyEnvVar: OPENAI_COMPAT_PRESETS.ollama.apiKeyEnvVar,
-      apiKey: "secret-key",
     });
 
     const opencodeGo = applyOpenAiCompatPreset(ollama, "opencode-go");
@@ -75,7 +73,6 @@ describe("client/settings-helpers", () => {
       baseUrl: OPENAI_COMPAT_PRESETS["opencode-go"].baseUrl,
       model: OPENAI_COMPAT_PRESETS["opencode-go"].model,
       apiKeyEnvVar: OPENAI_COMPAT_PRESETS["opencode-go"].apiKeyEnvVar,
-      apiKey: "secret-key",
     });
   });
 
@@ -85,7 +82,6 @@ describe("client/settings-helpers", () => {
       baseUrl: "https://api.openai.com/v1",
       model: "gpt-4o-mini",
       apiKeyEnvVar: "OPENAI_API_KEY",
-      apiKey: "sk-test",
     });
 
     const custom = applyOpenAiCompatPreset(initial, "custom");

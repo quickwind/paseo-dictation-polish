@@ -64,7 +64,7 @@
     "backgroundAgentSection": {
       "title": "Background Agent",
       "providerLabel": "Provider",
-      "providerHint": "Paseo agent provider used for background polishing.",
+      "providerHint": "Tool-free Paseo provider for background polishing (Claude only; use OpenAI-Compatible API for other models).",
       "providerFallbackHint": "No available providers returned; enter a provider ID manually.",
       "providerPlaceholder": "e.g. codex or claude",
       "autoDefaultOption": "(Auto / Default)",
@@ -111,11 +111,8 @@
       "modelHint": "Model identifier sent to the endpoint.",
       "modelPlaceholder": "gpt-4o-mini",
       "apiKeyEnvVarLabel": "API Key Env Var",
-      "apiKeyEnvVarHint": "Recommended: environment variable name on the Paseo host (e.g. OPENCODE_API_KEY).",
+      "apiKeyEnvVarHint": "Daemon environment variable name holding your API key (e.g. OPENCODE_API_KEY). Leave blank for keyless local endpoints. Keys stay on the daemon and are never saved in plugin settings.",
       "apiKeyEnvVarPlaceholder": "OPENCODE_API_KEY",
-      "apiKeyLabel": "API Key (Optional Override)",
-      "apiKeyHint": "Stored in plaintext inside host plugin settings JSON. Prefer API Key Env Var when possible.",
-      "apiKeyPlaceholder": "sk-...",
       "saveLabel": "Save API Configuration",
       "saveHint": "Persist OpenAI-compatible endpoint settings.",
       "saveAction": "Save"

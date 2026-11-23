@@ -69,9 +69,20 @@ export const OpenAiCompatiblePreferencesSchema = z.object({
   baseUrl: z.string().default(OPENAI_COMPAT_PRESETS["opencode-go"].baseUrl),
   model: z.string().default(OPENAI_COMPAT_PRESETS["opencode-go"].model),
   apiKeyEnvVar: z.string().default(OPENAI_COMPAT_PRESETS["opencode-go"].apiKeyEnvVar),
-  apiKey: z.string().default(""),
 });
 export type OpenAiCompatiblePreferences = z.infer<typeof OpenAiCompatiblePreferencesSchema>;
+
+/**
+ * Providers that support a verifiable tool-free configuration at session creation.
+ * Other Paseo coding providers leave built-in tools exposed and are disabled for
+ * Background Agent polishing.
+ */
+export const TOOL_FREE_BACKGROUND_PROVIDERS = ["claude"] as const;
+
+export function isToolFreeBackgroundProvider(provider: string): boolean {
+  const normalized = provider.trim().split("/", 1)[0]?.toLowerCase() ?? "";
+  return (TOOL_FREE_BACKGROUND_PROVIDERS as readonly string[]).includes(normalized);
+}
 
 export const PreferencesSchema = z.object({
   engine: PolishEngineKindSchema.default("background-agent"),

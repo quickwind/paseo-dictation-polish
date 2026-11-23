@@ -17,6 +17,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
+  isToolFreeBackgroundProvider,
   preferencesSettings,
   type BackgroundAgentPreferences,
   type OpenAiCompatPresetId,
@@ -289,7 +290,9 @@ function ReadySettingsContent({
     }
   }
 
-  const availableProviders = (providersQuery.data?.providers ?? []).filter((p) => p.available);
+  const availableProviders = (providersQuery.data?.providers ?? []).filter(
+    (p) => p.available && isToolFreeBackgroundProvider(p.provider),
+  );
   const providerOptions = availableProviders.map((p) => ({
     label: p.provider,
     value: p.provider,
@@ -660,19 +663,6 @@ function ReadySettingsContent({
               disabled={saving}
               onChangeText={(text) => {
                 setOaiDraft((prev) => ({ ...prev, apiKeyEnvVar: text }));
-              }}
-            />
-
-            <SettingsInput
-              key={`oai-apiKey-${oaiInputVersion}`}
-              label={t("settings.openaiCompatSection.apiKeyLabel")}
-              hint={t("settings.openaiCompatSection.apiKeyHint")}
-              placeholder={t("settings.openaiCompatSection.apiKeyPlaceholder")}
-              initialValue={oaiDraft.apiKey}
-              secureTextEntry={true}
-              disabled={saving}
-              onChangeText={(text) => {
-                setOaiDraft((prev) => ({ ...prev, apiKey: text }));
               }}
             />
 

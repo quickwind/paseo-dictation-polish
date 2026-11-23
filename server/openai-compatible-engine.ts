@@ -16,13 +16,13 @@ export class OpenAiCompatibleEngineError extends Error {
 }
 
 /**
- * Resolves the API key for an OpenAI-compatible Polish Engine:
- * 1) non-empty env[apiKeyEnvVar]
- * 2) non-empty inline apiKey
- * 3) undefined (omit Authorization header, e.g. for keyless Ollama)
+ * Resolves the API key for an OpenAI-compatible Polish Engine from the daemon
+ * host environment (`env[apiKeyEnvVar]`), or returns undefined when omitted
+ * (for keyless local endpoints such as Ollama). API keys are never persisted in
+ * host plugin settings.
  */
 export function resolveOpenAiCompatibleApiKey(
-  config: Pick<OpenAiCompatiblePreferences, "apiKeyEnvVar" | "apiKey">,
+  config: Pick<OpenAiCompatiblePreferences, "apiKeyEnvVar">,
   env: EnvLookup,
 ): string | undefined {
   const envVarName = config.apiKeyEnvVar.trim();
@@ -31,11 +31,6 @@ export function resolveOpenAiCompatibleApiKey(
     if (fromEnv) {
       return fromEnv;
     }
-  }
-
-  const inlineKey = config.apiKey.trim();
-  if (inlineKey.length > 0) {
-    return inlineKey;
   }
 
   return undefined;

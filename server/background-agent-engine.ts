@@ -1,8 +1,38 @@
 import type { PaseoApi } from "@getpaseo/client";
 import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
-import type { Preferences } from "../shared/preferences";
+import { isToolFreeBackgroundProvider, type Preferences } from "../shared/preferences";
 import type { WarmStandbyState } from "../shared/rpc";
 import type { PolishMessages } from "./prompts";
+
+const CLAUDE_DISALLOWED_BUILTIN_TOOLS = [
+  "Bash",
+  "Edit",
+  "Write",
+  "Read",
+  "Glob",
+  "Grep",
+  "WebFetch",
+  "WebSearch",
+  "NotebookEdit",
+  "Agent",
+  "TodoWrite",
+  "Task",
+  "TaskOutput",
+  "TaskStop",
+  "AskUserQuestion",
+  "EnterPlanMode",
+  "ExitPlanMode",
+  "Skill",
+] as const;
+
+function assertToolFreeBackgroundProvider(provider: string): void {
+  const trimmed = provider.trim();
+  if (trimmed && !isToolFreeBackgroundProvider(trimmed)) {
+    throw new Error(
+      `Provider "${trimmed}" does not support tool-free Background Agent mode. Use "claude" or switch to OpenAI-Compatible API.`,
+    );
+  }
+}
 
 const STANDBY_SYSTEM_PROMPT =
   "You are a text polishing engine. Follow the formatting instructions in each message strictly and output only the Polished Text.";
@@ -95,12 +125,18 @@ async function resolveProviderModel(
 
   if (!trimmedProvider) {
     const available = await paseo.providers.listAvailable();
-    const firstAvailable = (available.providers ?? []).find((entry) => entry.available);
-    if (!firstAvailable) {
-      throw new Error("No available Paseo provider found for Background Agent.");
+    const firstToolFree = (available.providers ?? []).find(
+      (entry) => entry.available && isToolFreeBackgroundProvider(entry.provider),
+    );
+    if (!firstToolFree) {
+      throw new Error(
+        "No tool-free Paseo provider (claude) is available for Background Agent mode. Switch to OpenAI-Compatible API.",
+      );
     }
-    trimmedProvider = firstAvailable.provider;
+    trimmedProvider = firstToolFree.provider;
   }
+
+  assertToolFreeBackgroundProvider(trimmedProvider);
 
   if (trimmedProvider.includes("/")) {
     if (!trimmedModel) {
@@ -182,8 +218,14 @@ export function createPaseoBackgroundAgentGateway(
         title: "Dictation Polish (Standby)",
         config: {
           provider: providerModel,
+          modeId: "plan",
           ...(thinkingOptionId ? { thinkingOptionId } : {}),
           ...(trimmedSystemPrompt ? { systemPrompt: trimmedSystemPrompt } : {}),
+          options: {
+            allowedTools: [],
+            disallowedTools: [...CLAUDE_DISALLOWED_BUILTIN_TOOLS],
+            extraArgs: { tools: "" },
+          },
           mcpServers: {},
         },
       });
@@ -283,6 +325,18 @@ export class WarmBackgroundAgentManager {
       return { warmState: "disabled", error: null };
     }
 
+    const configuredProvider = preferences.backgroundAgent.provider.trim();
+    if (configuredProvider && !isToolFreeBackgroundProvider(configuredProvider)) {
+      this.epoch += 1;
+      const oldAgentId = this.detachActiveAgent();
+      this.warmState = "error";
+      this.lastError = `Provider "${configuredProvider}" does not support tool-free Background Agent mode. Use "claude" or switch to OpenAI-Compatible API.`;
+      if (oldAgentId) {
+        void this.safeKill(oldAgentId);
+      }
+      return { warmState: "error", error: this.lastError };
+    }
+
     const fingerprint = buildConfigFingerprint(preferences);
 
     if (
@@ -330,6 +384,18 @@ export class WarmBackgroundAgentManager {
       return { warmState: this.warmState, error: null };
     }
 
+    const configuredProvider = preferences.backgroundAgent.provider.trim();
+    if (configuredProvider && !isToolFreeBackgroundProvider(configuredProvider)) {
+      this.epoch += 1;
+      const oldAgentId = this.detachActiveAgent();
+      this.warmState = "error";
+      this.lastError = `Provider "${configuredProvider}" does not support tool-free Background Agent mode. Use "claude" or switch to OpenAI-Compatible API.`;
+      if (oldAgentId) {
+        void this.safeKill(oldAgentId);
+      }
+      return { warmState: "error", error: this.lastError };
+    }
+
     const fingerprint = buildConfigFingerprint(preferences);
 
     if (this.activeAgentId !== null && this.activeFingerprint === fingerprint) {
@@ -356,6 +422,18 @@ export class WarmBackgroundAgentManager {
 
     if (!this.gateway) {
       throw new Error("Background agent gateway is not configured.");
+    }
+
+    const configuredProvider = preferences.backgroundAgent.provider.trim();
+    if (configuredProvider && !isToolFreeBackgroundProvider(configuredProvider)) {
+      this.epoch += 1;
+      const oldAgentId = this.detachActiveAgent();
+      this.warmState = "error";
+      this.lastError = `Provider "${configuredProvider}" does not support tool-free Background Agent mode. Use "claude" or switch to OpenAI-Compatible API.`;
+      if (oldAgentId) {
+        void this.safeKill(oldAgentId);
+      }
+      throw new Error(this.lastError);
     }
 
     const fingerprint = buildConfigFingerprint(preferences);

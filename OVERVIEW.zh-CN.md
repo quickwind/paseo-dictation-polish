@@ -6,10 +6,10 @@
 
 当润色结果尚未被继续编辑时，你也可以通过 Command Center 的 **撤销上次润色** 恢复原文，或通过 **听写润色设置** 打开插件配置页。如果在润色请求进行中或润色完成后手动修改了输入框内容，插件会保留你的编辑而不会覆盖。遇到超时、网络错误或空输出时，插件遵循 fail-open 策略，原样保留 Raw Draft。
 
-插件在 Paseo 主机端提供两种 Polish Engine：
+插件在 Paseo 主机端提供两种纯文本 Polish Engine：
 
-- **后台 Agent（Background Agent）**：在后台预热并维持最多一个轻量级待命 Paseo Agent，在返回 Polished Text 后按配置次数异步轮换以保持上下文干净。
-- **OpenAI 兼容接口（OpenAI-Compatible API）**：以 `temperature: 0` 直接调用 `/chat/completions` 接口，无需创建 Paseo Agent 会话。
+- **后台 Agent（Background Agent）**：在后台预热并维持最多一个严格禁用工具（tool-free）的待命 Paseo Agent（仅限 `claude`，强制启用 `plan` 模式、空 `mcpServers`、`allowedTools: []`、`disallowedTools` 与 `--tools ""`），并在返回 Polished Text 后按配置次数异步轮换以保持上下文干净。无法在启动层强制禁用内置工具的其他 Provider 已禁用此模式。
+- **OpenAI 兼容接口（OpenAI-Compatible API）**：以 `temperature: 0` 直接调用纯文本 `/chat/completions` 接口，无需创建 Paseo Agent 会话。
 
 ## 配置说明
 
@@ -17,8 +17,8 @@
 
 在 Paseo 主机上打开 **设置 > 插件 > 听写润色**，选择一种 Polish Engine：
 
-- **后台 Agent**：选择可用的 Paseo Provider、可选模型覆盖、思考强度（默认 `low`）以及轮换阈值（默认 `1` 次）。可点击 **立即预热** 提前启动待命 Agent。
-- **OpenAI 兼容接口**：选择接口预设（`OpenCode Go`、`OpenAI`、`Groq`、`Ollama（本地）` 或 `自定义`）以自动填充 Base URL、模型和 API Key 环境变量名。例如 `OpenCode Go` 默认使用 `https://opencode.ai/zen/go/v1`、模型 `deepseek-v4.1-flash` 与主机环境变量 `OPENCODE_API_KEY`。对于 Ollama 等无需鉴权的本地接口，可将环境变量名与直接填写的 API Key 均留空。建议优先使用环境变量，避免在主机插件配置 JSON 中以明文保存密钥。
+- **后台 Agent**：当 Paseo 主机已配置可用的 `claude` Provider 时可用。可设置可选模型覆盖、思考强度（默认 `low`）以及轮换阈值（默认 `1` 次），也可点击 **立即预热** 提前启动待命 Agent。
+- **OpenAI 兼容接口**：选择接口预设（`OpenCode Go`、`OpenAI`、`Groq`、`Ollama（本地）` 或 `自定义`）以自动填充 Base URL、模型和 API Key 环境变量名。例如 `OpenCode Go` 默认使用 `https://opencode.ai/zen/go/v1`、模型 `deepseek-v4.1-flash` 与守护进程宿主机环境变量 `OPENCODE_API_KEY`。对于 Ollama 等无需鉴权的本地接口，可将环境变量名留空。API Key 仅由守护进程从宿主机环境变量读取，绝不保存在插件配置中，也不会回传给任何已连接的客户端。
 
 可使用设置页底部的 **内联测试区**（Inline Test Playground）验证配置并查看实际往返耗时（ms）。
 
@@ -37,7 +37,7 @@
 ### 数据发送与存储说明
 
 - 只有当前输入框中的 Raw Draft（或测试区文本）以及你设置的 Polish Profile、自定义指令和 Vocabulary 会被发送到你所配置的 Polish Engine。
-- 插件配置保存在 Paseo 守护进程的主机级插件配置中；若选择直接填写 API Key 而非环境变量，密钥会以明文存储在主机插件配置 JSON 中。
+- 插件配置保存在 Paseo 守护进程的主机级插件配置中；API Key 仅通过守护进程环境变量读取，绝不存储在插件配置 JSON 中。
 - 撤销快照仅保存在当前客户端内存中，输入框内容变化后即自动失效并清除。
 
 ### 已知限制

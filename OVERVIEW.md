@@ -8,8 +8,8 @@ You can also revert from the Command Center using **Revert last polish** while t
 
 Two Polish Engine modes are supported on the Paseo host:
 
-- **Background Agent**: Keeps a single warm-standby Paseo background agent ready with minimal context and rotates it asynchronously after the configured number of uses.
-- **OpenAI-Compatible API**: Sends a direct `/chat/completions` request with `temperature: 0` to an OpenAI-compatible endpoint, without spawning a Paseo agent session.
+- **Background Agent**: Keeps a single warm-standby Paseo background agent ready in a strict tool-free configuration (`claude` only, with `plan` mode, empty `mcpServers`, `allowedTools: []`, `disallowedTools`, and `--tools ""`) and rotates it asynchronously after the configured number of uses. Providers that cannot enforce a tool-free configuration are disabled for Background Agent polishing.
+- **OpenAI-Compatible API**: Sends a direct text-only `/chat/completions` request with `temperature: 0` to an OpenAI-compatible endpoint, without spawning a Paseo agent session.
 
 ## Setup
 
@@ -17,8 +17,8 @@ Requires Paseo `>=0.17.0`.
 
 Open **Settings > Plugins > Dictation Polish** on your Paseo host and choose one Polish Engine:
 
-- **Background Agent**: Select an available Paseo provider, an optional model override, thinking effort (default `low`), and rotation threshold (default `1` use). Use **Warm Now** to pre-start the standby agent before your first polish.
-- **OpenAI-Compatible API**: Pick a preset (`OpenCode Go`, `OpenAI`, `Groq`, `Ollama (Local)`, or `Custom`) to pre-fill the Base URL, model, and API key environment variable name. For example, `OpenCode Go` defaults to `https://opencode.ai/zen/go/v1`, model `deepseek-v4.1-flash`, and `OPENCODE_API_KEY` on the Paseo host. For keyless local endpoints such as Ollama, leave both the environment variable name and inline key blank. Prefer environment variables over storing an inline API key in host plugin settings JSON.
+- **Background Agent**: Available when `claude` is configured on the Paseo host. Select an optional model override, thinking effort (default `low`), and rotation threshold (default `1` use). Use **Warm Now** to pre-start the standby agent before your first polish.
+- **OpenAI-Compatible API**: Pick a preset (`OpenCode Go`, `OpenAI`, `Groq`, `Ollama (Local)`, or `Custom`) to pre-fill the Base URL, model, and API key environment variable name. For example, `OpenCode Go` defaults to `https://opencode.ai/zen/go/v1`, model `deepseek-v4.1-flash`, and `OPENCODE_API_KEY` on the Paseo daemon host. For keyless local endpoints such as Ollama, leave the environment variable name blank. API keys are read strictly from the daemon environment and are never stored in plugin settings or returned to connected clients.
 
 Use the **Inline Test Playground** at the bottom of the settings screen to test your configuration and measure round-trip latency before using it in a workspace.
 
@@ -37,7 +37,7 @@ Use the **Inline Test Playground** at the bottom of the settings screen to test 
 ### Data sent and stored
 
 - Only the current composer Raw Draft (or playground sample text), along with your selected Polish Profile, Custom Instructions, and Vocabulary, is sent to the Polish Engine you configure.
-- Settings are stored in host-scoped plugin preferences on the Paseo daemon. If you enter an inline API key instead of an environment variable name, that key is stored in plaintext inside the host plugin settings JSON.
+- Settings are stored in host-scoped plugin preferences on the Paseo daemon. API keys are never stored in plugin settings JSON; the daemon resolves Bearer tokens strictly from the configured host environment variable.
 - Undo snapshots are kept only in client memory for the current session and cleared when the draft changes.
 
 ### Known limits

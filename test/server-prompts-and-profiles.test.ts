@@ -18,7 +18,6 @@ function makePreferences(overrides: Partial<Preferences> = {}): Preferences {
       baseUrl: "https://api.openai.com/v1",
       model: "gpt-4o-mini",
       apiKeyEnvVar: "OPENAI_API_KEY",
-      apiKey: "",
       ...(overrides.openaiCompatible ?? {}),
     },
     backgroundAgent: {
@@ -127,7 +126,6 @@ describe("Polish Profiles, Vocabulary, and customInstructions across engines", (
             preset: "custom",
             baseUrl: "https://api.example.com/v1",
             apiKeyEnvVar: "TEST_OPENAI_KEY",
-            apiKey: "",
             model: "gpt-4o-mini",
           },
         }),

@@ -288,7 +288,7 @@ describe("WarmBackgroundAgentManager & PolishService", () => {
     expect(status.warmState).toBe("disabled");
   });
 
-  it("kills old agent and warms a new one when provider or model changes", async () => {
+  it("kills old agent and warms a new one when model or thinking changes, and rejects non-tool-free providers", async () => {
     const gateway = new FakeBackgroundAgentGateway();
     let prefs = makePreferences({
       backgroundAgent: { provider: "claude", model: "haiku", thinking: "low", rotateAfterUses: 1 },
@@ -300,16 +300,26 @@ describe("WarmBackgroundAgentManager & PolishService", () => {
     expect(gateway.createdAgents[0]?.model).toBe("haiku");
 
     prefs = makePreferences({
-      backgroundAgent: { provider: "codex", model: "gpt-5.4", thinking: "low", rotateAfterUses: 1 },
+      backgroundAgent: { provider: "claude", model: "sonnet", thinking: "low", rotateAfterUses: 1 },
     });
     const res = await manager.syncSettings(prefs);
 
     expect(res.warmState).toBe("ready");
     expect(gateway.killedAgents).toEqual(["bg-agent-1"]);
     expect(gateway.createdAgents).toHaveLength(2);
-    expect(gateway.createdAgents[1]?.provider).toBe("codex");
-    expect(gateway.createdAgents[1]?.model).toBe("gpt-5.4");
+    expect(gateway.createdAgents[1]?.provider).toBe("claude");
+    expect(gateway.createdAgents[1]?.model).toBe("sonnet");
     expect(Array.from(gateway.liveAgents)).toEqual(["bg-agent-2"]);
+
+    // Non-tool-free provider (e.g. codex) is disabled and tears down active agent
+    const rejected = await manager.syncSettings(
+      makePreferences({
+        backgroundAgent: { provider: "codex", model: "gpt-5.4", thinking: "low", rotateAfterUses: 1 },
+      }),
+    );
+    expect(rejected.warmState).toBe("error");
+    expect(rejected.error).toContain("tool-free");
+    expect(gateway.liveAgents.size).toBe(0);
   });
 
   it("dispose() kills active warm agent and cleans up in-flight warmup agents", async () => {
@@ -460,8 +470,14 @@ describe("createPaseoBackgroundAgentGateway", () => {
       title: "Dictation Polish (Standby)",
       config: {
         provider: "claude/haiku",
+        modeId: "plan",
         thinkingOptionId: "low",
         systemPrompt: "Polish only.",
+        options: {
+          allowedTools: [],
+          disallowedTools: expect.arrayContaining(["Bash", "Read", "Edit", "Write", "Glob", "Grep"]),
+          extraArgs: { tools: "" },
+        },
         mcpServers: {},
       },
     });
@@ -484,10 +500,10 @@ describe("createPaseoBackgroundAgentGateway", () => {
     expect(archiveMock).toHaveBeenCalledTimes(1);
   });
 
-  it("auto-selects the first available provider via listAvailable when provider is empty", async () => {
+  it("auto-selects tool-free claude via listAvailable when provider is empty, and rejects non-tool-free providers", async () => {
     const listAvailableMock = vi.fn(async () => ({
       providers: [
-        { provider: "codex", available: false, error: "not logged in" },
+        { provider: "codex", available: true, error: null },
         { provider: "claude", available: true, error: null },
       ],
     }));
@@ -523,9 +539,21 @@ describe("createPaseoBackgroundAgentGateway", () => {
         background: true,
         config: expect.objectContaining({
           provider: "claude/claude-haiku-5-5",
+          modeId: "plan",
+          options: expect.objectContaining({
+            allowedTools: [],
+            extraArgs: { tools: "" },
+          }),
           mcpServers: {},
         }),
       }),
     );
+
+    await expect(
+      gateway.createAgent({
+        provider: "codex",
+        thinking: "low",
+      }),
+    ).rejects.toThrow("tool-free");
   });
 });

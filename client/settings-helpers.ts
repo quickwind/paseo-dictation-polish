@@ -100,7 +100,6 @@ export function isOpenAiCompatDirty(
     saved.preset !== draft.preset ||
     saved.baseUrl !== draft.baseUrl ||
     saved.model !== draft.model ||
-    saved.apiKeyEnvVar !== draft.apiKeyEnvVar ||
-    saved.apiKey !== draft.apiKey
+    saved.apiKeyEnvVar !== draft.apiKeyEnvVar
   );
 }

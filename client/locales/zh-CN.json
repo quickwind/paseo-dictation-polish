@@ -64,7 +64,7 @@
     "backgroundAgentSection": {
       "title": "后台 Agent 设置",
       "providerLabel": "Provider",
-      "providerHint": "用于后台润色的 Paseo Agent Provider。",
+      "providerHint": "仅支持可强制禁用工具的 Paseo Provider（目前为 Claude；其他模型请使用 OpenAI 兼容接口）。",
       "providerFallbackHint": "未获取到可用 Provider 列表，请手动输入 Provider ID。",
       "providerPlaceholder": "例如 codex 或 claude",
       "autoDefaultOption": "（自动 / 默认）",
@@ -111,11 +111,8 @@
       "modelHint": "发送到接口的模型标识。",
       "modelPlaceholder": "gpt-4o-mini",
       "apiKeyEnvVarLabel": "API Key 环境变量名",
-      "apiKeyEnvVarHint": "推荐：填写 Paseo 主机上的环境变量名（例如 OPENCODE_API_KEY）。",
+      "apiKeyEnvVarHint": "Paseo 守护进程宿主机上的环境变量名（例如 OPENCODE_API_KEY）；无需鉴权的本地接口可留空。密钥仅在守护进程读取，绝不保存在插件配置中。",
       "apiKeyEnvVarPlaceholder": "OPENCODE_API_KEY",
-      "apiKeyLabel": "API Key（可选直接填写）",
-      "apiKeyHint": "注意：直接填写会以明文存储在主机插件配置 JSON 中，建议优先使用环境变量。",
-      "apiKeyPlaceholder": "sk-...",
       "saveLabel": "保存接口配置",
       "saveHint": "保存 OpenAI 兼容接口参数。",
       "saveAction": "保存"

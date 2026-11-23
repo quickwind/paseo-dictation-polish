@@ -50,7 +50,6 @@ describe("Preferences & PolishService", () => {
         baseUrl: "https://opencode.ai/zen/go/v1",
         model: "deepseek-v4.1-flash",
         apiKeyEnvVar: "OPENCODE_API_KEY",
-        apiKey: "",
       },
       profile: "clean",
       customInstructions: "",
@@ -86,7 +85,6 @@ describe("Preferences & PolishService", () => {
             baseUrl: "https://opencode.ai/zen/go/v1/",
             model: "deepseek-v4.1-flash",
             apiKeyEnvVar: "OPENCODE_API_KEY",
-            apiKey: "inline-should-not-win",
           },
         }),
       fetchFn,
@@ -119,10 +117,10 @@ describe("Preferences & PolishService", () => {
     );
   });
 
-  it("falls back to inline apiKey when env var is missing", async () => {
-    let authHeader: string | undefined;
+  it("omits Authorization header when daemon env var is missing", async () => {
+    let headersSent: Record<string, string> = {};
     const fetchFn: typeof fetch = vi.fn(async (_input, init) => {
-      authHeader = (init?.headers as Record<string, string>).Authorization;
+      headersSent = init?.headers as Record<string, string>;
       return makeChatResponse("Polished text.");
     });
 
@@ -135,7 +133,6 @@ describe("Preferences & PolishService", () => {
             baseUrl: OPENAI_COMPAT_PRESETS.openai.baseUrl,
             model: OPENAI_COMPAT_PRESETS.openai.model,
             apiKeyEnvVar: "OPENAI_API_KEY",
-            apiKey: "inline-fallback-key",
           },
         }),
       fetchFn,
@@ -144,7 +141,7 @@ describe("Preferences & PolishService", () => {
 
     const result = await service.polish({ text: "polished text" });
     expect(result.fallback).toBe(false);
-    expect(authHeader).toBe("Bearer inline-fallback-key");
+    expect(headersSent.Authorization).toBeUndefined();
   });
 
   it("omits Authorization header for keyless Ollama preset", async () => {
@@ -163,7 +160,6 @@ describe("Preferences & PolishService", () => {
             baseUrl: OPENAI_COMPAT_PRESETS.ollama.baseUrl,
             model: OPENAI_COMPAT_PRESETS.ollama.model,
             apiKeyEnvVar: "",
-            apiKey: "",
           },
         }),
       fetchFn,
