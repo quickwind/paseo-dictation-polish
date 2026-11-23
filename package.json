@@ -1,12 +1,15 @@
 {
   "name": "paseo-dictation-polish",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Wispr Flow-style dictation polishing inside Paseo: remove fillers, fix self-corrections, and format spoken drafts with one click.",
+  "author": "quickwind",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/quickwind/paseo-dictation-polish.git"
   },
   "files": [
+    "LICENSE",
     "paseo-plugin.json",
     "OVERVIEW.md",
     "OVERVIEW.*.md",
