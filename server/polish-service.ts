@@ -3,29 +3,19 @@ import type {
   PolishRunInput,
   PolishRunOutput,
   PolishStatusOutput,
-  PolishWarmOutput,
 } from "../shared/rpc";
-import type { WarmBackgroundAgentManager } from "./background-agent-engine";
 import {
   OpenAiCompatibleEngineError,
   runOpenAiCompatiblePolish,
   type EnvLookup,
 } from "./openai-compatible-engine";
-import { buildPolishMessages, type PolishMessages } from "./prompts";
-
-export type BackgroundAgentPolishEngine = (params: {
-  readonly messages: PolishMessages;
-  readonly preferences: Preferences;
-  readonly signal: AbortSignal;
-}) => Promise<string>;
+import { buildPolishMessages } from "./prompts";
 
 export interface PolishServiceOptions {
   readonly getSettings: () => Promise<Preferences>;
   readonly fetchFn?: typeof fetch;
   readonly env?: EnvLookup;
   readonly now?: () => number;
-  readonly backgroundAgentEngine?: BackgroundAgentPolishEngine;
-  readonly backgroundAgentManager?: WarmBackgroundAgentManager;
 }
 
 function isAbortOrTimeoutError(error: unknown, signal: AbortSignal): boolean {
@@ -57,15 +47,14 @@ function isSuspiciousExpansion(
 }
 
 /**
- * Server-side Polish Engine orchestrator enforcing strict fail-open guarantees.
+ * Server-side Polish Engine orchestrator enforcing strict fail-open guarantees
+ * over a text-only OpenAI-compatible chat endpoint.
  */
 export class PolishService {
   private readonly getSettings: () => Promise<Preferences>;
   private readonly fetchFn: typeof fetch;
   private readonly env: EnvLookup;
   private readonly now: () => number;
-  private readonly backgroundAgentEngine?: BackgroundAgentPolishEngine;
-  private readonly backgroundAgentManager?: WarmBackgroundAgentManager;
   private lastLatencyMs: number | null = null;
   private lastFallbackReason: string | null = null;
 
@@ -74,51 +63,16 @@ export class PolishService {
     this.fetchFn = options.fetchFn ?? fetch;
     this.env = options.env ?? process.env;
     this.now = options.now ?? (() => Date.now());
-    this.backgroundAgentManager = options.backgroundAgentManager;
-    this.backgroundAgentEngine =
-      options.backgroundAgentEngine ??
-      (options.backgroundAgentManager
-        ? (params) => options.backgroundAgentManager!.polish(params)
-        : undefined);
   }
 
   async getStatus(): Promise<PolishStatusOutput> {
     const preferences = await this.getSettings();
-    const warmStatus = this.backgroundAgentManager
-      ? this.backgroundAgentManager.getStatus()
-      : {
-          warmState:
-            preferences.engine === "background-agent"
-              ? ("idle" as const)
-              : ("disabled" as const),
-          lastError: null,
-          usesOnCurrentAgent: 0,
-        };
-
     return {
       engine: preferences.engine,
-      warmState: preferences.engine === "background-agent" ? warmStatus.warmState : "disabled",
       lastLatencyMs: this.lastLatencyMs,
       lastFallbackReason: this.lastFallbackReason,
-      lastError: warmStatus.lastError,
-      usesOnCurrentAgent: warmStatus.usesOnCurrentAgent,
       showComposerPill: preferences.showComposerPill,
     };
-  }
-
-  async warm(): Promise<PolishWarmOutput> {
-    const preferences = await this.getSettings();
-    if (!this.backgroundAgentManager) {
-      if (preferences.engine !== "background-agent") {
-        return { warmState: "disabled", error: null };
-      }
-      return {
-        warmState: "error",
-        error: "Background agent manager is not configured.",
-      };
-    }
-
-    return this.backgroundAgentManager.warm(preferences);
   }
 
   async polish(input: PolishRunInput): Promise<PolishRunOutput> {
@@ -152,10 +106,6 @@ export class PolishService {
       };
     }
 
-    if (engine === "background-agent" && !this.backgroundAgentEngine) {
-      return failOpen("background_agent_not_configured");
-    }
-
     const messages = buildPolishMessages({
       rawDraft: input.text,
       profile,
@@ -170,21 +120,13 @@ export class PolishService {
 
     let rawOutput: string;
     try {
-      if (engine === "background-agent") {
-        rawOutput = await this.backgroundAgentEngine!({
-          messages,
-          preferences,
-          signal: controller.signal,
-        });
-      } else {
-        rawOutput = await runOpenAiCompatiblePolish({
-          config: preferences.openaiCompatible,
-          messages,
-          signal: controller.signal,
-          fetchFn: this.fetchFn,
-          env: this.env,
-        });
-      }
+      rawOutput = await runOpenAiCompatiblePolish({
+        config: preferences.openaiCompatible,
+        messages,
+        signal: controller.signal,
+        fetchFn: this.fetchFn,
+        env: this.env,
+      });
     } catch (error) {
       return failOpen(classifyFailureReason(error, controller.signal));
     } finally {

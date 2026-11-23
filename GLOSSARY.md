@@ -5,7 +5,7 @@ Domain language for polishing spoken dictation and rough prompt drafts inside Pa
 ## Language
 
 **Polish Engine**:
-The server-side inference backend that transforms rough input text into polished text, either via a Paseo background agent or a direct OpenAI-compatible chat endpoint.
+The server-side text-only inference backend that transforms a Raw Draft into Polished Text via an OpenAI-compatible chat endpoint.
 _Avoid_: Formatter, LLM backend, rewriter
 
 **Polish Profile**:

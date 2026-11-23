@@ -11,9 +11,9 @@ Clean up spoken dictation and rough prompt drafts right inside the [Paseo](https
 ## Features
 
 - **One-click Composer Polish & Undo**: Click the **Polish** (`Sparkles`) button in the composer action bar to clean your draft in place. Right after polishing, the same button flips to **Undo polish** (slashed `Sparkles` icon) so you can revert to the exact original draft in one click—or use **Revert last polish** from the Command Center (`⌘K`).
-- **Dual Polish Engine**:
-  - **Background Agent (Default)**: Reuses an authenticated `claude` provider in strict tool-free mode (`plan` mode, empty `mcpServers`, `allowedTools: []`, `disallowedTools`, and `--tools ""`) with zero extra API keys. Maintains a single warm-standby background agent and rotates it asynchronously after use. (Providers that cannot enforce tool-free mode are disabled here.)
-  - **OpenAI-Compatible API**: Direct text-only `/chat/completions` calls with built-in presets for **OpenCode Go** (`https://opencode.ai/zen/go/v1`), **OpenAI**, **Groq**, **Ollama (Local)**, and **Custom** endpoints. Resolves API keys strictly from daemon host environment variables (e.g. `OPENCODE_API_KEY`) and never stores secrets in plugin settings.
+- **Text-Only OpenAI-Compatible Polish Engine**:
+  - Direct, tool-free `/chat/completions` (`temperature: 0`) calls with built-in presets for **OpenCode Go** (`https://opencode.ai/zen/go/v1`), **OpenAI**, **Groq**, **Ollama (Local)**, and **Custom** endpoints.
+  - Resolves API keys strictly from daemon host environment variables (e.g. `OPENCODE_API_KEY`) and never stores secrets in plugin settings or exposes filesystem/MCP tools.
 - **Polish Profiles & Vocabulary**:
   - `clean`: Removes verbal fillers (`um`, `uh`, `嗯`, `那个`), resolves mid-sentence self-corrections, fixes punctuation, and wraps code identifiers/paths in backticks while preserving original language and intent.
   - `structured`: Organizes multi-point spoken instructions into concise Markdown lists or steps.

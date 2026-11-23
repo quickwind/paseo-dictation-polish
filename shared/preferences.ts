@@ -1,7 +1,7 @@
 import { defineSettings } from "@getpaseo/plugin";
 import { z } from "zod";
 
-export const PolishEngineKindSchema = z.enum(["background-agent", "openai-compatible"]);
+export const PolishEngineKindSchema = z.enum(["openai-compatible"]);
 export type PolishEngineKind = z.infer<typeof PolishEngineKindSchema>;
 
 export const PolishProfileSchema = z.enum(["clean", "structured", "translate-en"]);
@@ -56,14 +56,6 @@ export const OPENAI_COMPAT_PRESETS: Record<OpenAiCompatPresetId, OpenAiCompatPre
   },
 };
 
-export const BackgroundAgentPreferencesSchema = z.object({
-  provider: z.string().default(""),
-  model: z.string().default(""),
-  thinking: z.string().default("low"),
-  rotateAfterUses: z.number().int().min(1).max(20).default(1),
-});
-export type BackgroundAgentPreferences = z.infer<typeof BackgroundAgentPreferencesSchema>;
-
 export const OpenAiCompatiblePreferencesSchema = z.object({
   preset: OpenAiCompatPresetIdSchema.default("opencode-go"),
   baseUrl: z.string().default(OPENAI_COMPAT_PRESETS["opencode-go"].baseUrl),
@@ -72,23 +64,13 @@ export const OpenAiCompatiblePreferencesSchema = z.object({
 });
 export type OpenAiCompatiblePreferences = z.infer<typeof OpenAiCompatiblePreferencesSchema>;
 
-/**
- * Providers that support a verifiable tool-free configuration at session creation.
- * Other Paseo coding providers leave built-in tools exposed and are disabled for
- * Background Agent polishing.
- */
-export const TOOL_FREE_BACKGROUND_PROVIDERS = ["claude"] as const;
-
-export function isToolFreeBackgroundProvider(provider: string): boolean {
-  const normalized = provider.trim().split("/", 1)[0]?.toLowerCase() ?? "";
-  return (TOOL_FREE_BACKGROUND_PROVIDERS as readonly string[]).includes(normalized);
-}
-
 export const PreferencesSchema = z.object({
-  engine: PolishEngineKindSchema.default("background-agent"),
-  backgroundAgent: BackgroundAgentPreferencesSchema.default(() =>
-    BackgroundAgentPreferencesSchema.parse({}),
-  ),
+  engine: z
+    .preprocess(
+      (value) => (value === "background-agent" ? "openai-compatible" : value),
+      PolishEngineKindSchema,
+    )
+    .default("openai-compatible"),
   openaiCompatible: OpenAiCompatiblePreferencesSchema.default(() =>
     OpenAiCompatiblePreferencesSchema.parse({}),
   ),

@@ -11,10 +11,6 @@ function makePreferences(overrides: Partial<Preferences> = {}): Preferences {
   return {
     ...base,
     ...overrides,
-    backgroundAgent: {
-      ...base.backgroundAgent,
-      ...overrides.backgroundAgent,
-    },
     openaiCompatible: {
       ...base.openaiCompatible,
       ...overrides.openaiCompatible,
@@ -35,16 +31,10 @@ function makeChatResponse(content: string, status = 200): Response {
 }
 
 describe("Preferences & PolishService", () => {
-  it("parses empty settings into complete defaults and exposes all presets", () => {
+  it("parses empty settings into complete defaults, migrates legacy engine, and exposes all presets", () => {
     const defaults = PreferencesSchema.parse({});
     expect(defaults).toEqual({
-      engine: "background-agent",
-      backgroundAgent: {
-        provider: "",
-        model: "",
-        thinking: "low",
-        rotateAfterUses: 1,
-      },
+      engine: "openai-compatible",
       openaiCompatible: {
         preset: "opencode-go",
         baseUrl: "https://opencode.ai/zen/go/v1",
@@ -57,6 +47,9 @@ describe("Preferences & PolishService", () => {
       timeoutMs: 8000,
       showComposerPill: false,
     });
+    expect(PreferencesSchema.parse({ engine: "background-agent" }).engine).toBe(
+      "openai-compatible",
+    );
     expect(Object.keys(OPENAI_COMPAT_PRESETS)).toEqual([
       "opencode-go",
       "openai",
@@ -185,17 +178,31 @@ describe("Preferences & PolishService", () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
-  it("fails open when background-agent engine is selected but not configured", async () => {
+  it("reports engine status including last latency and fallback reason", async () => {
+    const fetchFn: typeof fetch = vi.fn(async () => makeChatResponse("", 500));
     const service = new PolishService({
-      getSettings: async () => makePreferences({ engine: "background-agent" }),
+      getSettings: async () => makePreferences(),
+      fetchFn,
+      now: (() => {
+        let tick = 1000;
+        return () => {
+          tick += 25;
+          return tick;
+        };
+      })(),
     });
 
     const result = await service.polish({ text: "hello world" });
-    expect(result.text).toBe("hello world");
-    expect(result.changed).toBe(false);
     expect(result.fallback).toBe(true);
-    expect(result.fallbackReason).toBe("background_agent_not_configured");
-    expect(result.engine).toBe("background-agent");
+    expect(result.fallbackReason).toBe("http_error");
+
+    const status = await service.getStatus();
+    expect(status).toEqual({
+      engine: "openai-compatible",
+      lastLatencyMs: 25,
+      lastFallbackReason: "http_error",
+      showComposerPill: false,
+    });
   });
 
   it("fails open on timeout", async () => {

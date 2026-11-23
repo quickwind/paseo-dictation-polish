@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Preferences } from "../shared/preferences";
 import { PolishService } from "../server/polish-service";
-import { buildPolishMessages, type PolishMessages } from "../server/prompts";
+import { buildPolishMessages } from "../server/prompts";
 import { formatVocabularySection, parseVocabulary } from "../server/vocabulary";
 
 function makePreferences(overrides: Partial<Preferences> = {}): Preferences {
@@ -20,98 +20,75 @@ function makePreferences(overrides: Partial<Preferences> = {}): Preferences {
       apiKeyEnvVar: "OPENAI_API_KEY",
       ...(overrides.openaiCompatible ?? {}),
     },
-    backgroundAgent: {
-      provider: "codex",
-      model: "",
-      thinking: "",
-      rotateAfterUses: 20,
-      ...(overrides.backgroundAgent ?? {}),
-    },
   };
 }
 
-describe("Vocabulary parser and formatter", () => {
-  it("ignores blank lines, # comments, and malformed arrow entries while deduplicating in order", () => {
+describe("Vocabulary parser & prompt assembly", () => {
+  it("parses canonical terms and mishearing corrections while ignoring blanks, comments, and malformed arrows", () => {
     const raw = [
       "",
-      "   # host-wide vocabulary",
-      "passio -> Paseo",
-      "passio -> Paseo",
-      "use composer → useComposer",
-      "ts config => tsconfig.json",
-      "-> missingLeft",
-      "missingRight ->   ",
-      "   =>   ",
+      "   # host-wide terms",
       "Paseo",
+      "帕塞奥 -> Paseo",
+      "帕塞奥 -> Paseo",
+      "夏尔巴 → Sherpa-ONNX",
+      "优兹 => useComposer",
+      " -> emptyLeft",
+      "emptyRight ->   ",
+      "tsconfig.json",
       "Paseo",
-      "vitest",
-      "# trailing comment",
+      "   useComposer   ",
     ].join("\n");
 
     const parsed = parseVocabulary(raw);
     expect(parsed.corrections).toEqual([
-      { misheard: "passio", canonical: "Paseo" },
-      { misheard: "use composer", canonical: "useComposer" },
-      { misheard: "ts config", canonical: "tsconfig.json" },
+      { misheard: "帕塞奥", canonical: "Paseo" },
+      { misheard: "夏尔巴", canonical: "Sherpa-ONNX" },
+      { misheard: "优兹", canonical: "useComposer" },
     ]);
-    expect(parsed.terms).toEqual(["Paseo", "vitest"]);
+    expect(parsed.terms).toEqual(["Paseo", "tsconfig.json", "useComposer"]);
 
-    const formatted = formatVocabularySection(parsed);
-    expect(formatted).toContain("Mishearing corrections (replace left with right):");
-    expect(formatted).toContain("- passio -> Paseo");
-    expect(formatted).toContain("- use composer -> useComposer");
-    expect(formatted).toContain("- ts config -> tsconfig.json");
-    expect(formatted).toContain("Preferred canonical spellings:");
-    expect(formatted).toContain("- Paseo");
-    expect(formatted).toContain("- vitest");
+    const section = formatVocabularySection(parsed);
+    expect(section).toContain("Mishearing corrections");
+    expect(section).toContain("- 帕塞奥 -> Paseo");
+    expect(section).toContain("Preferred canonical spellings:");
+    expect(section).toContain("- tsconfig.json");
+
+    expect(formatVocabularySection(parseVocabulary("  \n# only comment\n"))).toBeNull();
   });
 
-  it("returns null when vocabulary only contains blanks and comments", () => {
-    const parsed = parseVocabulary("\n  # comment only\n\n");
-    expect(parsed).toEqual({ corrections: [], terms: [] });
-    expect(formatVocabularySection(parsed)).toBeNull();
-  });
-});
-
-describe("Polish Profiles, Vocabulary, and customInstructions across engines", () => {
-  it("frames structured and translate-en profiles distinctly and scopes customInstructions below core guardrail", () => {
+  it("builds distinct structured and translate-en instructions and scopes customInstructions beneath core guardrail", () => {
     const structured = buildPolishMessages({
-      rawDraft: "um first check auth then update tests",
+      rawDraft: "first add tests second run typecheck",
       profile: "structured",
-      vocabulary: "passio -> Paseo\nuseComposer",
-      customInstructions: "  Prefer concise bullet points.  ",
-    });
-
-    const translate = buildPolishMessages({
-      rawDraft: "嗯帮我改一下这个 bug",
-      profile: "translate-en",
-      vocabulary: "passio -> Paseo\nuseComposer",
-      customInstructions: "  Prefer concise bullet points.  ",
+      customInstructions: "Prefer concise bullet points.",
+      vocabulary: "Paseo\n帕塞奥 -> Paseo",
     });
 
     expect(structured.systemPrompt).toContain("Polish Profile: structured");
     expect(structured.systemPrompt).toContain("Markdown bullet lists or numbered steps");
-    expect(translate.systemPrompt).toContain("Polish Profile: translate-en");
-    expect(translate.systemPrompt).toContain("concise, idiomatic English technical/coding prompt");
+    expect(structured.systemPrompt).toContain("Prefer concise bullet points.");
+    expect(structured.systemPrompt).toContain("- 帕塞奥 -> Paseo");
 
-    for (const msg of [structured, translate]) {
-      const guardrailIdx = msg.systemPrompt.indexOf("STRICT RULES (unbypassable):");
-      const customIdx = msg.systemPrompt.indexOf("Additional user formatting preferences");
-      expect(guardrailIdx).toBeGreaterThan(-1);
-      expect(customIdx).toBeGreaterThan(guardrailIdx);
-      expect(msg.systemPrompt).toContain(
-        "may only refine formatting style and must NEVER override the strict rules above",
-      );
-      expect(msg.systemPrompt).toContain("Prefer concise bullet points.");
-      expect(msg.systemPrompt).toContain("- passio -> Paseo");
-      expect(msg.systemPrompt).toContain("- useComposer");
-    }
+    const guardrailIdx = structured.systemPrompt.indexOf("STRICT RULES (unbypassable):");
+    const customIdx = structured.systemPrompt.indexOf("Additional user formatting preferences");
+    expect(guardrailIdx).toBeGreaterThanOrEqual(0);
+    expect(customIdx).toBeGreaterThan(guardrailIdx);
+    expect(structured.systemPrompt).toContain("must NEVER override the strict rules above");
+
+    const translated = buildPolishMessages({
+      rawDraft: "帮我把 帕塞奥 的 tsconfig.json 改一下",
+      profile: "translate-en",
+    });
+    expect(translated.systemPrompt).toContain("Polish Profile: translate-en");
+    expect(translated.systemPrompt).toContain("Translate Chinese or mixed Chinese/English Raw Draft");
+    expect(translated.userPrompt).toContain("<raw_draft>");
+    expect(translated.userPrompt).toContain("帮我把 帕塞奥 的 tsconfig.json 改一下");
   });
 
-  it("delivers identical PolishMessages to both openai-compatible and background-agent engines and honors profileOverride", async () => {
-    const vocabulary = "# comment\npassio -> Paseo\nuseComposer";
-    const customInstructions = "Keep sentences short.";
-    const rawDraft = "嗯把 passio 的 useComposer 修一下";
+  it("honors profileOverride, customInstructions, and vocabulary in OpenAI-Compatible engine", async () => {
+    const vocabulary = "Paseo\n帕塞奥 -> Paseo";
+    const customInstructions = "Keep sentences crisp.";
 
     let openAiSystemPrompt = "";
     let openAiUserPrompt = "";
@@ -137,111 +114,84 @@ describe("Polish Profiles, Vocabulary, and customInstructions across engines", (
         openAiSystemPrompt = body.messages[0]?.content ?? "";
         openAiUserPrompt = body.messages[1]?.content ?? "";
         return new Response(
-          JSON.stringify({
-            choices: [{ message: { content: "Fix `useComposer` in `Paseo`." } }],
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
+          JSON.stringify({ choices: [{ message: { content: "- Step 1\n- Step 2" } }] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
         );
       },
     });
 
-    let bgMessages: PolishMessages | undefined;
-    const bgService = new PolishService({
-      getSettings: async () =>
-        makePreferences({
-          engine: "background-agent",
-          profile: "clean",
-          vocabulary,
-          customInstructions,
-        }),
-      backgroundAgentEngine: async ({ messages }) => {
-        bgMessages = messages;
-        return "Fix `useComposer` in `Paseo`.";
-      },
+    const result = await openAiService.polish({
+      text: "那个 帮我先跑测试 然后构建 帕塞奥",
+      profileOverride: "structured",
     });
 
-    const openAiRes = await openAiService.polish({
-      text: rawDraft,
-      profileOverride: "translate-en",
-    });
-    const bgRes = await bgService.polish({
-      text: rawDraft,
-      profileOverride: "translate-en",
-    });
-
-    expect(openAiRes.fallback).toBe(false);
-    expect(bgRes.fallback).toBe(false);
-    expect(openAiSystemPrompt).toContain("Polish Profile: translate-en");
-    expect(openAiSystemPrompt).not.toContain("Polish Profile: clean");
-    expect(bgMessages).toEqual({
-      systemPrompt: openAiSystemPrompt,
-      userPrompt: openAiUserPrompt,
-    });
+    expect(result.fallback).toBe(false);
+    expect(result.text).toBe("- Step 1\n- Step 2");
+    expect(openAiSystemPrompt).toContain("Polish Profile: structured");
+    expect(openAiSystemPrompt).toContain("Keep sentences crisp.");
+    expect(openAiSystemPrompt).toContain("- 帕塞奥 -> Paseo");
+    expect(openAiUserPrompt).toContain("那个 帮我先跑测试 然后构建 帕塞奥");
   });
 
-  it("exempts translate-en from suspicious_expansion while still failing open on empty output, error, and timeout", async () => {
-    const compactChinese = "修下登录";
+  it("exempts translate-en from suspicious expansion heuristic while still failing open on empty output, error, and timeout", async () => {
     const longEnglish =
-      "Please investigate and fix the authentication flow in the login module, ensuring token refresh, error handling, and session persistence work reliably across restarts and edge cases without breaking existing tests or user sessions in the application.";
+      "Please carefully refactor the authentication middleware in `auth.ts` so that session tokens expire after fifteen minutes, rotate refresh credentials cleanly, and add comprehensive integration tests covering edge cases and clock skew handling.";
 
     const okService = new PolishService({
-      getSettings: async () =>
-        makePreferences({
-          engine: "background-agent",
-          profile: "translate-en",
+      getSettings: async () => makePreferences({ profile: "translate-en" }),
+      env: { OPENAI_API_KEY: "secret" },
+      fetchFn: async () =>
+        new Response(JSON.stringify({ choices: [{ message: { content: longEnglish } }] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
         }),
-      backgroundAgentEngine: async () => longEnglish,
     });
 
-    const okRes = await okService.polish({ text: compactChinese });
-    expect(okRes.fallback).toBe(false);
-    expect(okRes.text).toBe(longEnglish);
+    const okResult = await okService.polish({ text: "改认证" });
+    expect(okResult.fallback).toBe(false);
+    expect(okResult.text).toBe(longEnglish);
 
     const emptyService = new PolishService({
-      getSettings: async () =>
-        makePreferences({
-          engine: "background-agent",
-          profile: "translate-en",
+      getSettings: async () => makePreferences({ profile: "translate-en" }),
+      env: { OPENAI_API_KEY: "secret" },
+      fetchFn: async () =>
+        new Response(JSON.stringify({ choices: [{ message: { content: "   " } }] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
         }),
-      backgroundAgentEngine: async () => "   ",
     });
-    const emptyRes = await emptyService.polish({ text: compactChinese });
-    expect(emptyRes.fallback).toBe(true);
-    expect(emptyRes.fallbackReason).toBe("empty_output");
-    expect(emptyRes.text).toBe(compactChinese);
+    const emptyResult = await emptyService.polish({ text: "改认证" });
+    expect(emptyResult.fallback).toBe(true);
+    expect(emptyResult.fallbackReason).toBe("empty_output");
+    expect(emptyResult.text).toBe("改认证");
 
     const errorService = new PolishService({
-      getSettings: async () =>
-        makePreferences({
-          engine: "background-agent",
-          profile: "translate-en",
-        }),
-      backgroundAgentEngine: async () => {
-        throw new Error("boom");
+      getSettings: async () => makePreferences({ profile: "translate-en" }),
+      env: { OPENAI_API_KEY: "secret" },
+      fetchFn: async () => {
+        throw new Error("provider failure");
       },
     });
-    const errorRes = await errorService.polish({ text: compactChinese });
-    expect(errorRes.fallback).toBe(true);
-    expect(errorRes.fallbackReason).toBe("engine_error");
-    expect(errorRes.text).toBe(compactChinese);
+    const errorResult = await errorService.polish({ text: "改认证" });
+    expect(errorResult.fallback).toBe(true);
+    expect(errorResult.fallbackReason).toBe("engine_error");
+    expect(errorResult.text).toBe("改认证");
 
     const timeoutService = new PolishService({
-      getSettings: async () =>
-        makePreferences({
-          engine: "background-agent",
-          profile: "translate-en",
-          timeoutMs: 15,
-        }),
-      backgroundAgentEngine: async ({ signal }) =>
-        new Promise<string>((_resolve, reject) => {
-          signal.addEventListener("abort", () => {
-            reject(new DOMException("Aborted", "AbortError"));
+      getSettings: async () => makePreferences({ profile: "translate-en", timeoutMs: 20 }),
+      env: { OPENAI_API_KEY: "secret" },
+      fetchFn: async (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            const err = new Error("Aborted");
+            err.name = "AbortError";
+            reject(err);
           });
         }),
     });
-    const timeoutRes = await timeoutService.polish({ text: compactChinese });
-    expect(timeoutRes.fallback).toBe(true);
-    expect(timeoutRes.fallbackReason).toBe("timeout");
-    expect(timeoutRes.text).toBe(compactChinese);
+    const timeoutResult = await timeoutService.polish({ text: "改认证" });
+    expect(timeoutResult.fallback).toBe(true);
+    expect(timeoutResult.fallbackReason).toBe("timeout");
+    expect(timeoutResult.text).toBe("改认证");
   });
 });

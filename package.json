@@ -1,6 +1,6 @@
 {
   "name": "paseo-dictation-polish",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Wispr Flow-style dictation polishing inside Paseo: remove fillers, fix self-corrections, and format spoken drafts with one click.",
   "repository": {
     "type": "git",

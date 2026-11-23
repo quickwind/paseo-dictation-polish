@@ -1,5 +1,5 @@
 import type { PluginSurfaceProps, SettingsState } from "@getpaseo/plugin/client";
-import { usePaseo, useRpc, useSettings, useTranslation } from "@getpaseo/plugin/client";
+import { useRpc, useSettings, useTranslation } from "@getpaseo/plugin/client";
 import {
   Loading,
   ScrollView,
@@ -17,9 +17,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
-  isToolFreeBackgroundProvider,
   preferencesSettings,
-  type BackgroundAgentPreferences,
   type OpenAiCompatPresetId,
   type OpenAiCompatiblePreferences,
   type PolishEngineKind,
@@ -27,21 +25,11 @@ import {
   type Preferences,
   type PreferencesSchema,
 } from "../shared/preferences";
-import {
-  polishRunRpc,
-  polishStatusRpc,
-  polishWarmRpc,
-  type PolishRunOutput,
-  type WarmStandbyState,
-} from "../shared/rpc";
+import { polishRunRpc, polishStatusRpc, type PolishRunOutput } from "../shared/rpc";
 import { setComposerPillEnabled } from "./composer-pill-manager";
 import { polishTranslations } from "./i18n";
 import {
   applyOpenAiCompatPreset,
-  buildRotateAfterUsesValues,
-  DEFAULT_THINKING_OPTIONS,
-  getModelThinkingOptions,
-  isBackgroundAgentDirty,
   isOpenAiCompatDirty,
   parseTimeoutMs,
 } from "./settings-helpers";
@@ -63,55 +51,38 @@ export function DictationPolishSettingsScreen(props: PluginSurfaceProps) {
     return <Loading />;
   }
 
-  if (settings.status === "invalid") {
+  if (settings.status === "invalid" || settings.status === "error") {
+    const isInvalid = settings.status === "invalid";
     return (
       <ScrollView
         style={{ flex: 1, backgroundColor: props.theme.colors.surface0 }}
         contentContainerStyle={{ padding: props.layout.compact ? 12 : 20 }}
       >
-        <SettingsSection title={t("settings.states.invalidTitle")}>
+        <SettingsSection
+          title={t(isInvalid ? "settings.states.invalidTitle" : "settings.states.errorTitle")}
+        >
           <SettingsCard>
             <SettingsRow
-              label={t("settings.states.invalidTitle")}
+              label={t(isInvalid ? "settings.states.invalidTitle" : "settings.states.errorTitle")}
               error={settings.error}
             />
             <SettingsAction
-              label={t("settings.states.resetLabel")}
-              hint={t("settings.states.resetHint")}
-              actionLabel={t("settings.states.resetAction")}
-              disabled={settings.saving}
+              label={t(isInvalid ? "settings.states.resetLabel" : "settings.states.reloadLabel")}
+              hint={t(isInvalid ? "settings.states.resetHint" : "settings.states.reloadHint")}
+              actionLabel={t(
+                isInvalid ? "settings.states.resetAction" : "settings.states.reloadAction",
+              )}
+              disabled={isInvalid ? settings.saving : false}
               onPress={() => {
-                void settings.reset().then((ok) => {
-                  if (ok) {
-                    toast.show(t("settings.states.resetDone"), { variant: "success" });
-                  }
-                });
-              }}
-            />
-          </SettingsCard>
-        </SettingsSection>
-      </ScrollView>
-    );
-  }
-
-  if (settings.status === "error") {
-    return (
-      <ScrollView
-        style={{ flex: 1, backgroundColor: props.theme.colors.surface0 }}
-        contentContainerStyle={{ padding: props.layout.compact ? 12 : 20 }}
-      >
-        <SettingsSection title={t("settings.states.errorTitle")}>
-          <SettingsCard>
-            <SettingsRow
-              label={t("settings.states.errorTitle")}
-              error={settings.error}
-            />
-            <SettingsAction
-              label={t("settings.states.reloadLabel")}
-              hint={t("settings.states.reloadHint")}
-              actionLabel={t("settings.states.reloadAction")}
-              onPress={() => {
-                void settings.reload();
+                if (isInvalid) {
+                  void settings.reset().then((ok) => {
+                    if (ok) {
+                      toast.show(t("settings.states.resetDone"), { variant: "success" });
+                    }
+                  });
+                } else {
+                  void settings.reload();
+                }
               }}
             />
           </SettingsCard>
@@ -133,40 +104,28 @@ function ReadySettingsContent({
   layout,
   settings,
 }: ReadySettingsContentProps) {
-  const paseo = usePaseo();
   const getStatus = useRpc(polishStatusRpc);
-  const runWarm = useRpc(polishWarmRpc);
   const runPolish = useRpc(polishRunRpc);
   const toast = useToast();
   const { t } = useTranslation(polishTranslations);
 
   const { values, revision, saving, saveError } = settings;
 
-  // Draft state for Background Agent
-  const [bgDraft, setBgDraft] = useState<BackgroundAgentPreferences>(values.backgroundAgent);
-  const [bgInputVersion, setBgInputVersion] = useState(0);
-
-  // Draft state for OpenAI-Compatible API
   const [oaiDraft, setOaiDraft] = useState<OpenAiCompatiblePreferences>(values.openaiCompatible);
   const [oaiInputVersion, setOaiInputVersion] = useState(0);
 
-  // Draft state for Profile details (customInstructions, vocabulary, timeoutMs)
   const [customInstructionsDraft, setCustomInstructionsDraft] = useState(values.customInstructions);
   const [vocabularyDraft, setVocabularyDraft] = useState(values.vocabulary);
   const [timeoutDraft, setTimeoutDraft] = useState(String(values.timeoutMs));
   const [profileInputVersion, setProfileInputVersion] = useState(0);
 
-  // Playground state
   const [playgroundDraft, setPlaygroundDraft] = useState(() => t("settings.playground.sampleDraft"));
   const playgroundEditedRef = useRef(false);
   const [playgroundProfile, setPlaygroundProfile] = useState<"" | PolishProfile>("");
   const [playgroundResult, setPlaygroundResult] = useState<PolishRunOutput | null>(null);
   const [playgroundError, setPlaygroundError] = useState<string | null>(null);
 
-  // Sync drafts when saved revision changes from host
   useEffect(() => {
-    setBgDraft(values.backgroundAgent);
-    setBgInputVersion((v) => v + 1);
     setOaiDraft(values.openaiCompatible);
     setOaiInputVersion((v) => v + 1);
     setCustomInstructionsDraft(values.customInstructions);
@@ -175,7 +134,6 @@ function ReadySettingsContent({
     setProfileInputVersion((v) => v + 1);
   }, [revision, values]);
 
-  // Keep default sample draft in sync with locale unless user edited it
   const localizedSample = t("settings.playground.sampleDraft");
   useEffect(() => {
     if (!playgroundEditedRef.current) {
@@ -183,32 +141,9 @@ function ReadySettingsContent({
     }
   }, [localizedSample]);
 
-  // Live Polish Engine status query
   const statusQuery = useQuery({
     queryKey: ["paseo-dictation-polish", "status", host.id],
     queryFn: () => getStatus({}),
-  });
-
-  const warmMutation = useMutation({
-    mutationFn: () => runWarm({}),
-    onSuccess: (res) => {
-      if (res.error) {
-        toast.error(t("settings.backgroundAgentSection.warmFailed", { error: res.error }));
-      } else {
-        toast.show(
-          t("settings.backgroundAgentSection.warmSuccess", {
-            state: formatWarmState(res.warmState),
-          }),
-          { variant: "success" },
-        );
-      }
-      void statusQuery.refetch();
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err);
-      toast.error(t("settings.backgroundAgentSection.warmFailed", { error: message }));
-      void statusQuery.refetch();
-    },
   });
 
   const playgroundMutation = useMutation({
@@ -226,24 +161,6 @@ function ReadySettingsContent({
     },
   });
 
-  // Available providers query (only needed when background-agent is active)
-  const providersQuery = useQuery({
-    queryKey: ["paseo-dictation-polish", "providers", host.id],
-    queryFn: () => paseo.providers.listAvailable(),
-    enabled: values.engine === "background-agent",
-  });
-
-  // Available models for the selected provider
-  const selectedProvider = bgDraft.provider;
-  const modelsQuery = useQuery({
-    queryKey: ["paseo-dictation-polish", "models", host.id, selectedProvider],
-    queryFn: () =>
-      paseo.providers.listModels(
-        selectedProvider as Parameters<typeof paseo.providers.listModels>[0],
-      ),
-    enabled: values.engine === "background-agent" && selectedProvider.trim().length > 0,
-  });
-
   async function savePreferences(nextValues: Preferences): Promise<boolean> {
     const ok = await settings.save(nextValues, revision);
     if (ok) {
@@ -258,14 +175,8 @@ function ReadySettingsContent({
     return ok;
   }
 
-  function formatEngineLabel(engine: PolishEngineKind): string {
-    return engine === "background-agent"
-      ? t("settings.engineSection.engines.backgroundAgent")
-      : t("settings.engineSection.engines.openaiCompatible");
-  }
-
-  function formatWarmState(state: WarmStandbyState): string {
-    return t(`settings.engineSection.warmStates.${state}`);
+  function formatEngineLabel(_engine: PolishEngineKind): string {
+    return t("settings.engineSection.engines.openaiCompatible");
   }
 
   function formatProfileLabel(profile: PolishProfile): string {
@@ -290,76 +201,18 @@ function ReadySettingsContent({
     }
   }
 
-  const availableProviders = (providersQuery.data?.providers ?? []).filter(
-    (p) => p.available && isToolFreeBackgroundProvider(p.provider),
-  );
-  const providerOptions = availableProviders.map((p) => ({
-    label: p.provider,
-    value: p.provider,
-  }));
-  if (
-    bgDraft.provider.trim().length > 0 &&
-    !providerOptions.some((opt) => opt.value === bgDraft.provider)
-  ) {
-    providerOptions.unshift({ label: bgDraft.provider, value: bgDraft.provider });
-  }
-
-  const providerModels = modelsQuery.data?.models ?? [];
-  const modelOptions: { label: string; value: string }[] = [
-    { label: t("settings.backgroundAgentSection.autoDefaultOption"), value: "" },
-    ...providerModels.map((m) => ({
-      label: m.label || m.id,
-      value: m.id,
-    })),
-  ];
-  if (bgDraft.model.trim().length > 0 && !modelOptions.some((opt) => opt.value === bgDraft.model)) {
-    modelOptions.push({ label: bgDraft.model, value: bgDraft.model });
-  }
-
-  const modelThinkingOptions = getModelThinkingOptions(providerModels, bgDraft.model);
-  const thinkingOptions =
-    modelThinkingOptions.length > 0
-      ? modelThinkingOptions.map((opt) => ({ label: opt.label, value: opt.id }))
-      : DEFAULT_THINKING_OPTIONS.map((id) => ({
-          label: t(`settings.backgroundAgentSection.thinkingOptions.${id}`),
-          value: id,
-        }));
-  if (
-    bgDraft.thinking.trim().length > 0 &&
-    !thinkingOptions.some((opt) => opt.value === bgDraft.thinking)
-  ) {
-    thinkingOptions.push({ label: bgDraft.thinking, value: bgDraft.thinking });
-  }
-
-  const rotateOptions = buildRotateAfterUsesValues(bgDraft.rotateAfterUses).map((count) => ({
-    label:
-      count === 1
-        ? t("settings.backgroundAgentSection.rotateUseOne")
-        : t("settings.backgroundAgentSection.rotateUsesOption", { count }),
-    value: String(count),
-  }));
-
-  const bgDirty = isBackgroundAgentDirty(values.backgroundAgent, bgDraft);
-  const oaiDirty = isOpenAiCompatDirty(values.openaiCompatible, oaiDraft);
-
   const timeoutValidation = parseTimeoutMs(timeoutDraft);
   const timeoutError = timeoutValidation.ok
-    ? null
-    : timeoutValidation.errorKind === "invalidNumber"
+    ? undefined
+    : timeoutValidation.reason === "invalid_number"
       ? t("settings.profileSection.timeoutInvalidNumber")
       : t("settings.profileSection.timeoutOutOfRange");
-  const profileDetailsDirty =
-    customInstructionsDraft !== values.customInstructions ||
-    vocabularyDraft !== values.vocabulary ||
-    (timeoutValidation.ok ? timeoutValidation.value !== values.timeoutMs : true);
 
-  const warmStateColor = (() => {
-    const state = statusQuery.data?.warmState;
-    if (state === "ready") return theme.colors.statusSuccess;
-    if (state === "error") return theme.colors.statusDanger;
-    if (state === "warming" || state === "rotating") return theme.colors.statusWarning;
-    return theme.colors.foreground;
-  })();
+  const oaiDirty = isOpenAiCompatDirty(values.openaiCompatible, oaiDraft);
+  const profileDetailsDirty =
+    values.customInstructions !== customInstructionsDraft ||
+    values.vocabulary !== vocabularyDraft ||
+    (timeoutValidation.ok ? values.timeoutMs !== timeoutValidation.value : true);
 
   const sectionGap = layout.compact ? 14 : 20;
   const pagePadding = layout.compact ? 12 : 20;
@@ -388,26 +241,6 @@ function ReadySettingsContent({
       {/* Section 1: Polish Engine & Status */}
       <SettingsSection title={t("settings.engineSection.title")}>
         <SettingsCard>
-          <SettingsSelect<PolishEngineKind>
-            label={t("settings.engineSection.engineLabel")}
-            hint={t("settings.engineSection.engineHint")}
-            value={values.engine}
-            disabled={saving}
-            options={[
-              {
-                label: t("settings.engineSection.engines.backgroundAgent"),
-                value: "background-agent",
-              },
-              {
-                label: t("settings.engineSection.engines.openaiCompatible"),
-                value: "openai-compatible",
-              },
-            ]}
-            onValueChange={(nextEngine) => {
-              void savePreferences({ ...values, engine: nextEngine });
-            }}
-          />
-
           <SettingsSwitch
             label={t("settings.engineSection.showComposerPillLabel")}
             hint={t("settings.engineSection.showComposerPillHint")}
@@ -445,12 +278,6 @@ function ReadySettingsContent({
                   ]}
                 >
                   <Text style={{ color: theme.colors.foregroundMuted, fontSize: 13 }}>
-                    {t("settings.engineSection.warmStateLabel")}:{" "}
-                    <Text style={{ color: warmStateColor, fontWeight: "600" }}>
-                      {formatWarmState(statusQuery.data.warmState)}
-                    </Text>
-                  </Text>
-                  <Text style={{ color: theme.colors.foregroundMuted, fontSize: 13 }}>
                     {t("settings.engineSection.lastLatencyLabel")}:{" "}
                     <Text style={{ color: theme.colors.foreground }}>
                       {statusQuery.data.lastLatencyMs !== null
@@ -465,11 +292,6 @@ function ReadySettingsContent({
                   <Text style={{ color: theme.colors.statusWarning, fontSize: 12 }}>
                     {t("settings.engineSection.lastFallbackLabel")}:{" "}
                     {statusQuery.data.lastFallbackReason}
-                  </Text>
-                ) : null}
-                {statusQuery.data.lastError ? (
-                  <Text style={{ color: theme.colors.statusDanger, fontSize: 12 }}>
-                    {t("settings.engineSection.lastErrorLabel")}: {statusQuery.data.lastError}
                   </Text>
                 ) : null}
               </View>
@@ -488,204 +310,82 @@ function ReadySettingsContent({
         </SettingsCard>
       </SettingsSection>
 
-      {/* Section 2A: Background Agent */}
-      {values.engine === "background-agent" ? (
-        <SettingsSection title={t("settings.backgroundAgentSection.title")}>
-          <SettingsCard>
-            {availableProviders.length > 0 ? (
-              <SettingsSelect<string>
-                label={t("settings.backgroundAgentSection.providerLabel")}
-                hint={t("settings.backgroundAgentSection.providerHint")}
-                value={bgDraft.provider}
-                disabled={saving}
-                options={[
-                  { label: t("settings.backgroundAgentSection.autoDefaultOption"), value: "" },
-                  ...providerOptions,
-                ]}
-                onValueChange={(nextProvider) => {
-                  setBgDraft((prev) => ({
-                    ...prev,
-                    provider: nextProvider,
-                    model: nextProvider === prev.provider ? prev.model : "",
-                  }));
-                }}
-              />
-            ) : (
-              <SettingsInput
-                key={`bg-provider-${bgInputVersion}`}
-                label={t("settings.backgroundAgentSection.providerLabel")}
-                hint={t("settings.backgroundAgentSection.providerFallbackHint")}
-                placeholder={t("settings.backgroundAgentSection.providerPlaceholder")}
-                initialValue={bgDraft.provider}
-                disabled={saving}
-                onChangeText={(text) => {
-                  setBgDraft((prev) => ({ ...prev, provider: text }));
-                }}
-              />
-            )}
+      {/* Section 2: OpenAI-Compatible API */}
+      <SettingsSection title={t("settings.openaiCompatSection.title")}>
+        <SettingsCard>
+          <SettingsSelect<OpenAiCompatPresetId>
+            label={t("settings.openaiCompatSection.presetLabel")}
+            hint={t("settings.openaiCompatSection.presetHint")}
+            value={oaiDraft.preset}
+            disabled={saving}
+            options={[
+              { label: t("settings.openaiCompatSection.presets.opencodeGo"), value: "opencode-go" },
+              { label: t("settings.openaiCompatSection.presets.openai"), value: "openai" },
+              { label: t("settings.openaiCompatSection.presets.groq"), value: "groq" },
+              { label: t("settings.openaiCompatSection.presets.ollama"), value: "ollama" },
+              { label: t("settings.openaiCompatSection.presets.custom"), value: "custom" },
+            ]}
+            onValueChange={(nextPreset) => {
+              setOaiDraft((prev) => applyOpenAiCompatPreset(prev, nextPreset));
+              setOaiInputVersion((v) => v + 1);
+            }}
+          />
 
-            {bgDraft.provider.trim().length > 0 && providerModels.length > 0 ? (
-              <SettingsSelect<string>
-                label={t("settings.backgroundAgentSection.modelLabel")}
-                hint={t("settings.backgroundAgentSection.modelHint")}
-                value={bgDraft.model}
-                disabled={saving}
-                options={modelOptions}
-                onValueChange={(nextModel) => {
-                  setBgDraft((prev) => ({ ...prev, model: nextModel }));
-                }}
-              />
-            ) : (
-              <SettingsInput
-                key={`bg-model-${bgInputVersion}`}
-                label={t("settings.backgroundAgentSection.modelLabel")}
-                hint={t("settings.backgroundAgentSection.modelFallbackHint")}
-                placeholder={t("settings.backgroundAgentSection.modelPlaceholder")}
-                initialValue={bgDraft.model}
-                disabled={saving}
-                onChangeText={(text) => {
-                  setBgDraft((prev) => ({ ...prev, model: text }));
-                }}
-              />
-            )}
+          <SettingsInput
+            key={`oai-baseUrl-${oaiInputVersion}`}
+            label={t("settings.openaiCompatSection.baseUrlLabel")}
+            hint={t("settings.openaiCompatSection.baseUrlHint")}
+            placeholder={t("settings.openaiCompatSection.baseUrlPlaceholder")}
+            initialValue={oaiDraft.baseUrl}
+            disabled={saving}
+            onChangeText={(text) => {
+              setOaiDraft((prev) => ({ ...prev, baseUrl: text }));
+            }}
+          />
 
-            <SettingsSelect<string>
-              label={t("settings.backgroundAgentSection.thinkingLabel")}
-              hint={t("settings.backgroundAgentSection.thinkingHint")}
-              value={bgDraft.thinking}
-              disabled={saving}
-              options={thinkingOptions}
-              onValueChange={(nextThinking) => {
-                setBgDraft((prev) => ({ ...prev, thinking: nextThinking }));
-              }}
-            />
+          <SettingsInput
+            key={`oai-model-${oaiInputVersion}`}
+            label={t("settings.openaiCompatSection.modelLabel")}
+            hint={t("settings.openaiCompatSection.modelHint")}
+            placeholder={t("settings.openaiCompatSection.modelPlaceholder")}
+            initialValue={oaiDraft.model}
+            disabled={saving}
+            onChangeText={(text) => {
+              setOaiDraft((prev) => ({ ...prev, model: text }));
+            }}
+          />
 
-            <SettingsSelect<string>
-              label={t("settings.backgroundAgentSection.rotateLabel")}
-              hint={t("settings.backgroundAgentSection.rotateHint")}
-              value={String(bgDraft.rotateAfterUses)}
-              disabled={saving}
-              options={rotateOptions}
-              onValueChange={(nextRotate) => {
-                const parsed = Number.parseInt(nextRotate, 10);
-                if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 20) {
-                  setBgDraft((prev) => ({ ...prev, rotateAfterUses: parsed }));
-                }
-              }}
-            />
+          <SettingsInput
+            key={`oai-envVar-${oaiInputVersion}`}
+            label={t("settings.openaiCompatSection.apiKeyEnvVarLabel")}
+            hint={t("settings.openaiCompatSection.apiKeyEnvVarHint")}
+            placeholder={t("settings.openaiCompatSection.apiKeyEnvVarPlaceholder")}
+            initialValue={oaiDraft.apiKeyEnvVar}
+            disabled={saving}
+            onChangeText={(text) => {
+              setOaiDraft((prev) => ({ ...prev, apiKeyEnvVar: text }));
+            }}
+          />
 
-            <SettingsAction
-              label={t("settings.backgroundAgentSection.saveLabel")}
-              hint={t("settings.backgroundAgentSection.saveHint")}
-              actionLabel={t("settings.backgroundAgentSection.saveAction")}
-              disabled={saving || !bgDirty}
-              onPress={() => {
-                void savePreferences({
-                  ...values,
-                  backgroundAgent: {
-                    ...bgDraft,
-                    provider: bgDraft.provider.trim(),
-                    model: bgDraft.model.trim(),
-                  },
-                });
-              }}
-            />
-
-            <SettingsAction
-              label={t("settings.backgroundAgentSection.warmLabel")}
-              hint={t("settings.backgroundAgentSection.warmHint")}
-              actionLabel={
-                warmMutation.isPending
-                  ? t("settings.backgroundAgentSection.warmingAction")
-                  : t("settings.backgroundAgentSection.warmAction")
-              }
-              disabled={warmMutation.isPending || saving}
-              onPress={() => {
-                warmMutation.mutate();
-              }}
-            />
-          </SettingsCard>
-        </SettingsSection>
-      ) : null}
-
-      {/* Section 2B: OpenAI-Compatible API */}
-      {values.engine === "openai-compatible" ? (
-        <SettingsSection title={t("settings.openaiCompatSection.title")}>
-          <SettingsCard>
-            <SettingsSelect<OpenAiCompatPresetId>
-              label={t("settings.openaiCompatSection.presetLabel")}
-              hint={t("settings.openaiCompatSection.presetHint")}
-              value={oaiDraft.preset}
-              disabled={saving}
-              options={[
-                { label: t("settings.openaiCompatSection.presets.opencodeGo"), value: "opencode-go" },
-                { label: t("settings.openaiCompatSection.presets.openai"), value: "openai" },
-                { label: t("settings.openaiCompatSection.presets.groq"), value: "groq" },
-                { label: t("settings.openaiCompatSection.presets.ollama"), value: "ollama" },
-                { label: t("settings.openaiCompatSection.presets.custom"), value: "custom" },
-              ]}
-              onValueChange={(nextPreset) => {
-                setOaiDraft((prev) => applyOpenAiCompatPreset(prev, nextPreset));
-                setOaiInputVersion((v) => v + 1);
-              }}
-            />
-
-            <SettingsInput
-              key={`oai-baseUrl-${oaiInputVersion}`}
-              label={t("settings.openaiCompatSection.baseUrlLabel")}
-              hint={t("settings.openaiCompatSection.baseUrlHint")}
-              placeholder={t("settings.openaiCompatSection.baseUrlPlaceholder")}
-              initialValue={oaiDraft.baseUrl}
-              disabled={saving}
-              onChangeText={(text) => {
-                setOaiDraft((prev) => ({ ...prev, baseUrl: text }));
-              }}
-            />
-
-            <SettingsInput
-              key={`oai-model-${oaiInputVersion}`}
-              label={t("settings.openaiCompatSection.modelLabel")}
-              hint={t("settings.openaiCompatSection.modelHint")}
-              placeholder={t("settings.openaiCompatSection.modelPlaceholder")}
-              initialValue={oaiDraft.model}
-              disabled={saving}
-              onChangeText={(text) => {
-                setOaiDraft((prev) => ({ ...prev, model: text }));
-              }}
-            />
-
-            <SettingsInput
-              key={`oai-envVar-${oaiInputVersion}`}
-              label={t("settings.openaiCompatSection.apiKeyEnvVarLabel")}
-              hint={t("settings.openaiCompatSection.apiKeyEnvVarHint")}
-              placeholder={t("settings.openaiCompatSection.apiKeyEnvVarPlaceholder")}
-              initialValue={oaiDraft.apiKeyEnvVar}
-              disabled={saving}
-              onChangeText={(text) => {
-                setOaiDraft((prev) => ({ ...prev, apiKeyEnvVar: text }));
-              }}
-            />
-
-            <SettingsAction
-              label={t("settings.openaiCompatSection.saveLabel")}
-              hint={t("settings.openaiCompatSection.saveHint")}
-              actionLabel={t("settings.openaiCompatSection.saveAction")}
-              disabled={saving || !oaiDirty}
-              onPress={() => {
-                void savePreferences({
-                  ...values,
-                  openaiCompatible: {
-                    ...oaiDraft,
-                    baseUrl: oaiDraft.baseUrl.trim(),
-                    model: oaiDraft.model.trim(),
-                    apiKeyEnvVar: oaiDraft.apiKeyEnvVar.trim(),
-                  },
-                });
-              }}
-            />
-          </SettingsCard>
-        </SettingsSection>
-      ) : null}
+          <SettingsAction
+            label={t("settings.openaiCompatSection.saveLabel")}
+            hint={t("settings.openaiCompatSection.saveHint")}
+            actionLabel={t("settings.openaiCompatSection.saveAction")}
+            disabled={saving || !oaiDirty}
+            onPress={() => {
+              void savePreferences({
+                ...values,
+                openaiCompatible: {
+                  ...oaiDraft,
+                  baseUrl: oaiDraft.baseUrl.trim(),
+                  model: oaiDraft.model.trim(),
+                  apiKeyEnvVar: oaiDraft.apiKeyEnvVar.trim(),
+                },
+              });
+            }}
+          />
+        </SettingsCard>
+      </SettingsSection>
 
       {/* Section 3: Polish Profile, Custom Instructions & Vocabulary */}
       <SettingsSection title={t("settings.profileSection.title")}>
@@ -710,8 +410,9 @@ function ReadySettingsContent({
             hint={t("settings.profileSection.customInstructionsHint")}
           >
             <TextInput
+              key={`custom-instructions-${profileInputVersion}`}
               multiline
-              value={customInstructionsDraft}
+              defaultValue={customInstructionsDraft}
               onChangeText={setCustomInstructionsDraft}
               placeholder={t("settings.profileSection.customInstructionsPlaceholder")}
               placeholderTextColor={theme.colors.foregroundMuted}
@@ -722,7 +423,7 @@ function ReadySettingsContent({
                   color: theme.colors.foreground,
                   backgroundColor: theme.colors.surface1,
                   borderColor: theme.colors.border,
-                  minHeight: 76,
+                  minHeight: 72,
                 },
               ]}
             />
@@ -733,8 +434,9 @@ function ReadySettingsContent({
             hint={t("settings.profileSection.vocabularyHint")}
           >
             <TextInput
+              key={`vocabulary-${profileInputVersion}`}
               multiline
-              value={vocabularyDraft}
+              defaultValue={vocabularyDraft}
               onChangeText={setVocabularyDraft}
               placeholder={t("settings.profileSection.vocabularyPlaceholder")}
               placeholderTextColor={theme.colors.foregroundMuted}
@@ -752,7 +454,7 @@ function ReadySettingsContent({
           </SettingsRow>
 
           <SettingsInput
-            key={`profile-timeout-${profileInputVersion}`}
+            key={`timeout-${profileInputVersion}`}
             label={t("settings.profileSection.timeoutLabel")}
             hint={t("settings.profileSection.timeoutHint")}
             placeholder={t("settings.profileSection.timeoutPlaceholder")}
@@ -766,11 +468,9 @@ function ReadySettingsContent({
             label={t("settings.profileSection.saveLabel")}
             hint={t("settings.profileSection.saveHint")}
             actionLabel={t("settings.profileSection.saveAction")}
-            disabled={saving || !profileDetailsDirty || !timeoutValidation.ok}
+            disabled={saving || !timeoutValidation.ok || !profileDetailsDirty}
             onPress={() => {
-              if (!timeoutValidation.ok) {
-                return;
-              }
+              if (!timeoutValidation.ok) return;
               void savePreferences({
                 ...values,
                 customInstructions: customInstructionsDraft,
